@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "VOX.AI",
+  "description": "Fill complex web forms by speaking — client-side AI (Gemini Nano) integration.",
+  "version": "0.1.0",
+  "permissions": ["storage", "scripting", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "VOX.AI"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["tailwind.css", "inpage.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

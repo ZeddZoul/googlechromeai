@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vox AI</title>
+    <link rel="stylesheet" href="util.css" />
+  </head>
+  <body class="p-4 font-sans">
+    <div class="max-w-sm" style="width:340px;background:white;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,0.08)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="width:44px;height:44px;border-radius:10px;background:#FFD700;display:flex;align-items:center;justify-content:center;color:#111;font-weight:700;font-size:14px">V</div>
+        <div>
+          <div style="font-size:18px;font-weight:700;color:#111">VOX.AI</div>
+          <div style="font-size:12px;color:#666">Voice-first form-filling — local</div>
+        </div>
+      </div>
+
+      <div style="height:78px;display:flex;align-items:center;justify-content:center;flex-direction:column;border-radius:8px;background:linear-gradient(180deg,#faf8f2,#fff7d9);margin-bottom:12px">
+        <div style="font-size:12px;color:#555;margin-bottom:6px">Live recording</div>
+        <button id="start" style="width:84px;height:84px;border-radius:42px;border:none;background:#FFD700;color:#111;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.12)">▶</button>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button id="inject" style="flex:1;padding:10px;border-radius:8px;border:1px solid #eee;background:white;color:#111;font-weight:600;cursor:pointer">Activate</button>
+        <button id="stop" style="flex:1;padding:10px;border-radius:8px;border:1px solid #eee;background:white;color:#111;font-weight:600;cursor:pointer">Stop</button>
+      </div>
+
+      <div id="log" style="min-height:40px;border-radius:8px;padding:8px;background:#fff;color:#111;font-size:12px;border:1px solid #f0f0f0"></div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
