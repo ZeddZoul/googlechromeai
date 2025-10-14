@@ -30,7 +30,7 @@
       monitor(m) {
         try { m.addEventListener && m.addEventListener('downloadprogress', (ev) => console.log('LanguageModel download progress', ev.loaded)); } catch (e) { }
       },
-      expectedInputs: [{ type: 'audio' }]
+      expectedInputs: [{ type: 'audio', languages: ['en'] }]
     });
     return window.__voxai_languageModelSession;
   }
