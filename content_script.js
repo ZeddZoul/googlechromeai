@@ -214,7 +214,6 @@ if (window.__voxai_installed) {
   function cleanupAudioResources() {
     // Stop and nullify the recognizer
     if (recognizer) {
-      try { recognizer.stop(); } catch (e) {}
       recognizer = null;
     }
 
@@ -254,11 +253,15 @@ if (window.__voxai_installed) {
         el._levelEl.style.background = '#111';
       }
 
-      // This will trigger the 'onstop' event where cleanup now happens
-      if (mediaRecorder.state !== 'inactive') {
+      // Stop both services simultaneously to ensure the recognizer finalizes its result.
+      if (recognizer) {
+        recognizer.stop();
+      }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
       } else {
-        // If already inactive, cleanup never triggered, so do it manually.
+        // If the recorder is already stopped, the onstop event won't fire,
+        // so we need to trigger cleanup manually.
         cleanupAudioResources();
       }
       return { success: true };
