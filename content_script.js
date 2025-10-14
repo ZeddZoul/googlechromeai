@@ -60,6 +60,10 @@ if (window.__voxai_installed) {
     el._levelEl = el.querySelector('#voxai-level');
 
     el.addEventListener('click', async () => {
+      if (isStopping) {
+        console.log('VOX.AI: Still stopping, please wait.');
+        return;
+      }
       if (!el.dataset.recording) {
         const ok = await startRecording();
         if (ok && ok.success) {
@@ -85,9 +89,11 @@ if (window.__voxai_installed) {
   let recognizer = null;
   let fallbackTranscript = '';
   let fallbackError = null;
+  let isStopping = false;
 
   async function startRecording() {
     if (mediaRecorder && mediaRecorder.state === 'recording') return { success: false, error: 'already recording' };
+    if (isStopping) return { success: false, error: 'still stopping previous recording' };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       currentStream = stream;
@@ -153,6 +159,10 @@ if (window.__voxai_installed) {
             recognizer = null;
           }
         } catch (e) { /* ignore */ }
+
+        // All cleanup is done, release the lock
+        isStopping = false;
+        console.log('VOX.AI: Stopping complete. Ready to record again.');
       };
       mediaRecorder.start();
 
@@ -172,7 +182,7 @@ if (window.__voxai_installed) {
             if (final.trim()) fallbackTranscript = final.trim();
           };
           recognizer.onerror = (err) => { console.warn('VOX.AI SR error', err); fallbackError = String(err && err.error ? err.error : err); };
-          try { recognizer.start(); } catch (e) { /* ignore start errors */ }
+          try { recognizer.start(); } catch (e) { console.error("VOX.AI: Failed to start SpeechRecognition", e); }
         }
       } catch (e) { /* ignore */ }
 
@@ -217,7 +227,10 @@ if (window.__voxai_installed) {
 
   function stopRecording() {
     if (!mediaRecorder) return { success: false, error: 'not recording' };
+    if (isStopping) return { success: false, error: 'already stopping' };
     try {
+      isStopping = true;
+      console.log('VOX.AI: Stopping recording...');
       // stop analyser UI loop immediately
       if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       const el = document.getElementById(FLOAT_ID);
@@ -229,6 +242,7 @@ if (window.__voxai_installed) {
       mediaRecorder && mediaRecorder.state !== 'inactive' && mediaRecorder.stop();
       return { success: true };
     } catch (err) {
+      isStopping = false; // Reset the lock on error
       return { success: false, error: String(err) };
     }
   }
