@@ -116,15 +116,11 @@ if (window.__voxai_installed) {
         const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
         let responded = false;
         function onMsg(e) {
-          if (!e.data || e.data.channel !== channel) return;
+          // A valid response must have data, the correct channel, and a payload.
+          if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
           responded = true;
           window.removeEventListener('message', onMsg);
-          // If payload is missing, log the entire message for debugging
-          if (typeof e.data.payload === 'undefined') {
-            console.warn('VOX.AI: inpage response received but payload is undefined; full message:', e.data);
-          } else {
-            console.log('VOX.AI: inpage response', e.data.payload);
-          }
+          console.log('VOX.AI: inpage response', e.data.payload);
         }
         window.addEventListener('message', onMsg);
         // include any fallback transcript produced by the SpeechRecognition API
