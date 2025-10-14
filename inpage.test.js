@@ -58,6 +58,7 @@ describe('inpage.js', () => {
     expect(mockLanguageModel.create).toHaveBeenCalledWith({
       monitor: expect.any(Function),
       expectedInputs: [{ type: 'audio', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
     });
     expect(session).toBe(mockSession);
   });
