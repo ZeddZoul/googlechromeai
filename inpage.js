@@ -76,6 +76,7 @@
       if (avail === 'unavailable') {
         // If the content script provided a speech recognition fallback transcript, return it.
         if (fallbackTranscript) {
+          console.log('VOX.AI: Attempting transcription with fallback API.');
           respond(channel, { success: true, result: { transcription: fallbackTranscript, structured: {} }, source: 'fallback' });
           return;
         }
@@ -83,6 +84,7 @@
         return;
       }
 
+      console.log('VOX.AI: Attempting transcription with Gemini Nano.');
       const session = await ensureSession();
 
       // Build a generic responseConstraint asking for structured+transcription

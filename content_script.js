@@ -19,13 +19,17 @@ if (window.__voxai_installed) {
       s.type = 'text/javascript';
       s.async = false;
       (document.head || document.documentElement).appendChild(s);
-      s.onload = () => s.remove();
+      s.onload = () => {
+        console.log('VOX.AI: In-page script injected.');
+        s.remove();
+      };
     } catch (err) { console.warn('VOX.AI: failed to inject inpage', err); }
   })();
 
   // Build and attach floating mic
   function createFloatingMic() {
     if (document.getElementById(FLOAT_ID)) return;
+    console.log('VOX.AI: Floating mic icon is being added to the page.');
     const el = document.createElement('div');
     el.id = FLOAT_ID;
     el.style.position = 'fixed';
@@ -60,6 +64,7 @@ if (window.__voxai_installed) {
     el._levelEl = el.querySelector('#voxai-level');
 
     el.addEventListener('click', async () => {
+      console.log('VOX.AI: Floating mic icon clicked.');
       if (isStopping) {
         console.log('VOX.AI: Still stopping, please wait.');
         return;
@@ -67,11 +72,12 @@ if (window.__voxai_installed) {
       if (!el.dataset.recording) {
         const ok = await startRecording();
         if (ok && ok.success) {
+          console.log('VOX.AI: Recording started.');
           el.dataset.recording = '1';
           el.style.background = '#ff6b6b';
         }
       } else {
-        const res = stopRecording();
+        stopRecording();
         delete el.dataset.recording;
         el.style.background = '#FFD700';
       }
@@ -139,30 +145,10 @@ if (window.__voxai_installed) {
           }
         }, 12000);
 
-        // cleanup audio graph and stop tracks
-        try {
-          if (analyser) analyser.disconnect();
-          if (sourceNode) sourceNode.disconnect();
-          if (audioContext) {
-            // close audio context to free resources
-            audioContext.close().catch(() => { });
-          }
-        } catch (e) { /* ignore */ }
-        if (currentStream) {
-          currentStream.getTracks().forEach(t => t.stop());
-          currentStream = null;
-        }
-        // stop and cleanup recognizer if present
-        try {
-          if (recognizer) {
-            try { recognizer.stop(); } catch (e) { }
-            recognizer = null;
-          }
-        } catch (e) { /* ignore */ }
+        // Send the audio data, then clean up all resources.
+        window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBuffer: buffer, mimeType: 'audio/webm', schema: null, channel, fallbackTranscript, fallbackError }, '*');
 
-        // All cleanup is done, release the lock
-        isStopping = false;
-        console.log('VOX.AI: Stopping complete. Ready to record again.');
+        cleanupAudioResources();
       };
       mediaRecorder.start();
 
@@ -225,12 +211,41 @@ if (window.__voxai_installed) {
     rafId = requestAnimationFrame(draw);
   }
 
+  function cleanupAudioResources() {
+    // Stop and nullify the recognizer
+    if (recognizer) {
+      try { recognizer.stop(); } catch (e) {}
+      recognizer = null;
+    }
+
+    // Stop media tracks
+    if (currentStream) {
+      currentStream.getTracks().forEach(t => t.stop());
+      currentStream = null;
+    }
+
+    // Disconnect and close the audio context
+    if (analyser) analyser.disconnect();
+    if (sourceNode) sourceNode.disconnect();
+    if (audioContext) {
+      audioContext.close().catch(() => {});
+      audioContext = null;
+    }
+
+    // Nullify the recorder
+    mediaRecorder = null;
+
+    // All cleanup is done, release the lock
+    isStopping = false;
+    console.log('VOX.AI: Cleanup complete. Ready to record again.');
+  }
+
   function stopRecording() {
+    console.log('VOX.AI: Recording stopped.');
     if (!mediaRecorder) return { success: false, error: 'not recording' };
     if (isStopping) return { success: false, error: 'already stopping' };
     try {
       isStopping = true;
-      console.log('VOX.AI: Stopping recording...');
       // stop analyser UI loop immediately
       if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       const el = document.getElementById(FLOAT_ID);
@@ -239,7 +254,13 @@ if (window.__voxai_installed) {
         el._levelEl.style.background = '#111';
       }
 
-      mediaRecorder && mediaRecorder.state !== 'inactive' && mediaRecorder.stop();
+      // This will trigger the 'onstop' event where cleanup now happens
+      if (mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      } else {
+        // If already inactive, cleanup never triggered, so do it manually.
+        cleanupAudioResources();
+      }
       return { success: true };
     } catch (err) {
       isStopping = false; // Reset the lock on error
