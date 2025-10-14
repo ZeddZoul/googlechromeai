@@ -29,9 +29,15 @@
     window.__voxai_languageModelSession = await LanguageModel.create({
       monitor(m) {
         try { m.addEventListener && m.addEventListener('downloadprogress', (ev) => console.log('LanguageModel download progress', ev.loaded)); } catch (e) { }
-      }
+      },
+      expectedInputs: [{ type: 'audio', languages: ['en'] }]
     });
     return window.__voxai_languageModelSession;
+  }
+
+  // Expose for testing
+  if (typeof jest !== 'undefined') {
+    window.__voxai_ensureSession = ensureSession;
   }
 
   window.addEventListener('message', async (ev) => {
@@ -111,27 +117,24 @@
           { role: 'system', content: systemPrompt },
           { role: 'user', content: [{ type: 'audio', value: file }] }
         ],
-        { responseConstraint, outputLanguage: 'en' }
+        { responseConstraint }
       );
 
-      // Normalize response: try to extract JSON if present, otherwise use output_text
+      // The Prompt API with a responseConstraint is expected to return a JSON string.
+      // We'll keep this robust with a fallback.
       let result = null;
       try {
-        // Some runtimes return an object; others return text.
-        if (raw && raw.output_text) {
-          try { result = JSON.parse(raw.output_text); }
-          catch (e) { result = { transcription: raw.output_text || '', structured: {} }; }
-        } else if (typeof raw === 'string') {
-          try { result = JSON.parse(raw); }
-          catch (e) { result = { transcription: raw || '', structured: {} }; }
-        } else if (raw && Array.isArray(raw.output) && raw.output[0] && raw.output[0].content && raw.output[0].content[0] && raw.output[0].content[0].text) {
-          const txt = raw.output[0].content[0].text;
-          try { result = JSON.parse(txt); } catch (e) { result = { transcription: txt || '', structured: {} }; }
+        if (typeof raw === 'string') {
+          result = JSON.parse(raw);
         } else {
-          result = { transcription: String(raw || ''), structured: {} };
+          // Fallback for unexpected response formats
+          const content = String(raw || '');
+          result = { transcription: content, structured: {} };
         }
       } catch (e) {
-        result = { transcription: String(raw || ''), structured: {} };
+        // If JSON parsing fails, treat the raw output as the transcription.
+        const content = String(raw || '');
+        result = { transcription: content, structured: {} };
       }
 
       respond(channel, { success: true, result });
