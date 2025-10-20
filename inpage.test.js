@@ -67,6 +67,10 @@ describe('inpage.js', () => {
     const mockSession = { prompt: jest.fn() };
     mockLanguageModel.create.mockResolvedValue(mockSession);
     mockLanguageModel.availability.mockResolvedValue('available');
+    const modelCapabilities = {
+      expectedInputs: [{ type: 'audio', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    };
     const mockResponse = { transcription: 'hello world', structured: { foo: 'bar' } };
     mockSession.prompt.mockResolvedValue(JSON.stringify(mockResponse));
 
@@ -84,6 +88,10 @@ describe('inpage.js', () => {
   });
 
   test('handles API unavailable with fallback transcript', async () => {
+    const modelCapabilities = {
+      expectedInputs: [{ type: 'audio', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    };
     mockLanguageModel.availability.mockResolvedValue('unavailable');
 
     await dispatchMessage({
@@ -102,6 +110,10 @@ describe('inpage.js', () => {
 
   test('handles non-JSON response from prompt', async () => {
     const mockSession = { prompt: jest.fn() };
+    const modelCapabilities = {
+      expectedInputs: [{ type: 'audio', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    };
     mockLanguageModel.create.mockResolvedValue(mockSession);
     mockLanguageModel.availability.mockResolvedValue('available');
     mockSession.prompt.mockResolvedValue('just a string');

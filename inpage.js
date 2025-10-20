@@ -22,17 +22,22 @@
     return 'webm';
   }
 
+  const modelCapabilities = {
+    expectedInputs: [{ type: 'audio', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }]
+  };
+
   async function ensureSession() {
     if (window.__voxai_languageModelSession) return window.__voxai_languageModelSession;
     if (typeof LanguageModel === 'undefined') throw new Error('LanguageModel API not present');
-    // create with a small monitor to log download progress
-    window.__voxai_languageModelSession = await LanguageModel.create({
+
+    const sessionOptions = {
       monitor(m) {
         try { m.addEventListener && m.addEventListener('downloadprogress', (ev) => console.log('LanguageModel download progress', ev.loaded)); } catch (e) { }
       },
-      expectedInputs: [{ type: 'audio', languages: ['en'] }],
-      expectedOutputs: [{ type: 'text', languages: ['en'] }]
-    });
+      ...modelCapabilities
+    };
+    window.__voxai_languageModelSession = await LanguageModel.create(sessionOptions);
     return window.__voxai_languageModelSession;
   }
 
@@ -69,9 +74,15 @@
       const filename = `voxai_${Date.now()}.${ext}`;
       const file = new File([blob], filename, { type: blob.type });
 
-      // Check availability of the on-device model
+      // Check availability of the on-device model for the specific capabilities we need.
       let avail = 'unavailable';
-      try { if (typeof LanguageModel !== 'undefined' && LanguageModel && LanguageModel.availability) avail = await LanguageModel.availability(); } catch (e) { avail = 'unavailable'; }
+      try {
+        if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
+          avail = await LanguageModel.availability(modelCapabilities);
+        }
+      } catch (e) {
+        avail = 'unavailable';
+      }
 
       if (avail === 'unavailable') {
         // If the content script provided a speech recognition fallback transcript, return it.
