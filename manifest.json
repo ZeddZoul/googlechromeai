@@ -25,5 +25,6 @@
       "resources": ["tailwind.css", "inpage.js"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvrmIKZbhCb51rNMV/8z4rDg0tIeP3EkU2OoCeaYJYrxjazNp5yqWlfDUrDNSP7G5ad2FsQ8oup1gPqHbqDTWC7N1HAIrMNQTZbIgQdGmlMzG2HLQTDNGe6DkRQ9jpm/yB+oY/jm+K2i0VUVK+5Aq0+j6Wav753tHuhl73kzfQY0gNwpnMigAPjAOtVn20MQT+IYHCKhMadSXkmNDsFaBiopofObag5+BUG9dAmL72LUW56a3fzbiGnc/FmZpebVoS/trrOv+SerwzkCDrZM8jWMAeaG6EKc4kEHUruKsTueI1o+1s9GCwIKtNRZmaWwuiuu3XN/HuX6E2p4o7bouSQIDAQAB"
 }
