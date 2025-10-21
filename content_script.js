@@ -127,7 +127,7 @@ if (window.__voxai_installed) {
         // 1. Check for on-device model availability first.
         const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
         const onDeviceCheck = (e) => {
-          if (!e.data || e.data.channel !== channel) return;
+          if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
           window.removeEventListener('message', onDeviceCheck);
 
           if (e.data.payload.isAvailable) {
