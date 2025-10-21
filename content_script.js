@@ -123,30 +123,33 @@ if (window.__voxai_installed) {
       mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
-        const buffer = await blob.arrayBuffer();
-        // Send to in-page handler via window.postMessage
+
+        // 1. Check for on-device model availability first.
         const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
-        let responded = false;
-        function onMsg(e) {
-          // A valid response must have data, the correct channel, and a payload.
-          if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
-          responded = true;
-          window.removeEventListener('message', onMsg);
-          console.log('VOX.AI: inpage response', e.data.payload);
-        }
-        window.addEventListener('message', onMsg);
-        // include any fallback transcript produced by the SpeechRecognition API
-        window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBuffer: buffer, mimeType: 'audio/webm', schema: null, channel, fallbackTranscript, fallbackError }, '*');
+        const onDeviceCheck = (e) => {
+          if (!e.data || e.data.channel !== channel) return;
+          window.removeEventListener('message', onDeviceCheck);
 
-        // safety timeout: if no response within 12s, log helpful debug info
-        setTimeout(() => {
-          if (!responded) {
-            console.warn('VOX.AI: no inpage response within 12s — last fallbackTranscript:', fallbackTranscript, 'fallbackError:', fallbackError);
+          if (e.data.payload.isAvailable) {
+            // 2a. If available, send the audio to the in-page script for processing.
+            blob.arrayBuffer().then(buffer => {
+              window.postMessage({
+                voxai: 'PROCESS_AUDIO_INPAGE',
+                audioBuffer: buffer,
+                mimeType: 'audio/webm',
+                schema: null,
+                channel,
+                fallbackTranscript,
+                fallbackError
+              }, '*');
+            });
+          } else {
+            // 2b. If not available, proceed to the cloud fallback.
+            processWithCloud(blob);
           }
-        }, 12000);
-
-        // Send the audio data, then clean up all resources.
-        window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBuffer: buffer, mimeType: 'audio/webm', schema: null, channel, fallbackTranscript, fallbackError }, '*');
+        };
+        window.addEventListener('message', onDeviceCheck);
+        window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
 
         cleanupAudioResources();
       };
@@ -269,6 +272,55 @@ if (window.__voxai_installed) {
       isStopping = false; // Reset the lock on error
       return { success: false, error: String(err) };
     }
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function processWithCloud(blob) {
+    chrome.storage.sync.get(['apiKey'], async ({ apiKey }) => {
+      if (!apiKey) {
+        console.log('VOX.AI: Cloud Gemini API key not set. Using fallback transcript.');
+        if (fallbackTranscript) {
+          // Use the basic fallback if no key is available
+        }
+        return;
+      }
+
+      const audioBase64 = await blobToBase64(blob);
+      const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ inline_data: { mime_type: 'audio/webm', data: audioBase64 } }] }]
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        // TODO: Process the response from the Cloud Gemini API
+        console.log('VOX.AI: Cloud Gemini response:', data);
+
+      } catch (error) {
+        console.error('VOX.AI: Cloud Gemini API request failed:', error);
+        // Fallback to basic transcription if the cloud call fails
+        if (fallbackTranscript) {
+          // Use the basic fallback
+        }
+      }
+    });
   }
 
   // Message API from popup

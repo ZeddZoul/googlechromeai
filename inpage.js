@@ -47,7 +47,27 @@
   }
 
   window.addEventListener('message', async (ev) => {
-    if (!ev.data || ev.data.voxai !== 'PROCESS_AUDIO_INPAGE') return;
+    if (!ev.data || !ev.data.voxai) return;
+
+    if (ev.data.voxai === 'CHECK_ON_DEVICE') {
+      const { channel } = ev.data;
+      if (!channel) return;
+
+      let isAvailable = false;
+      try {
+        if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
+          const availability = await LanguageModel.availability(modelCapabilities);
+          isAvailable = availability !== 'unavailable';
+        }
+      } catch (e) {
+        isAvailable = false;
+      }
+
+      respond(channel, { isAvailable });
+      return;
+    }
+
+    if (ev.data.voxai !== 'PROCESS_AUDIO_INPAGE') return;
     const { audioBuffer, mimeType, audioBlobBase64, schema, channel, fallbackTranscript, fallbackError } = ev.data;
 
     if (!channel) return; // caller expects a channel to route response
@@ -85,6 +105,7 @@
       }
 
       if (avail === 'unavailable') {
+        console.log('VOX.AI: On-device model with audio support not found. This is expected on some devices. Proceeding to fallback...');
         // If the content script provided a speech recognition fallback transcript, return it.
         if (fallbackTranscript) {
           console.log('VOX.AI: Attempting transcription with fallback API.');
