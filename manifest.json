@@ -13,13 +13,12 @@
     "default_popup": "popup.html",
     "default_title": "VOX.AI"
   },
-  "options_page": "options.html",
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": [
         "firebase-app.js",
-        "firebase-vertexai-next.js",
+        "firebase-functions.js",
         "firebase-config.js",
         "content_script.js"
       ],
