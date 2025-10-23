@@ -257,11 +257,20 @@ if (window.__voxai_installed) {
   }
 
   async function processWithFirebase(blob) {
-    const app = firebase.initializeApp(firebaseConfig);
-    const vertexai = firebase.getVertexAI(app);
-    const model = vertexai.getGenerativeModel({ model: "gemini-pro" });
+    chrome.storage.sync.get(['apiKey'], async ({ apiKey }) => {
+      if (!apiKey) {
+        console.log('VOX.AI: Cloud Gemini API key not set. Using fallback transcript.');
+        if (fallbackTranscript) {
+          // Use the basic fallback if no key is available
+        }
+        return;
+      }
 
-    const audioBase64 = await blobToBase64(blob);
+      const app = firebase.initializeApp({ apiKey });
+      const vertexai = firebase.getVertexAI(app);
+      const model = vertexai.getGenerativeModel({ model: "gemini-pro" });
+
+      const audioBase64 = await blobToBase64(blob);
 
     const req = {
       contents: [{
@@ -272,13 +281,14 @@ if (window.__voxai_installed) {
 
     try {
       const result = await model.generateContent(req);
-      // TODO: Process the response from the Firebase Gemini API
-      console.log('VOX.AI: Firebase Gemini response:', result);
+      const response = result.response;
+      const text = response.text();
+      console.log('VOX.AI: Gemini Transcription:', text);
     } catch (error) {
       console.error('VOX.AI: Firebase Gemini API request failed:', error);
       // Fallback to basic transcription if the cloud call fails
       if (fallbackTranscript) {
-        // Use the basic fallback
+        console.log('VOX.AI: Using fallback transcription:', fallbackTranscript);
       }
     }
   }
