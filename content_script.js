@@ -141,11 +141,10 @@ if (window.__voxai_installed) {
             // 2b. If not available, proceed to the cloud fallback.
             processWithAILogic(blob);
           }
+          cleanupAudioResources();
         };
         window.addEventListener('message', onDeviceCheck);
         window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
-
-        cleanupAudioResources();
       };
       mediaRecorder.start();
 
@@ -277,7 +276,40 @@ if (window.__voxai_installed) {
     });
   }
 
+  function analyzeForm() {
+    const form = document.querySelector('form');
+    if (!form) return null;
+
+    const fields = [];
+    const inputs = form.querySelectorAll('input, textarea, select');
+    inputs.forEach(input => {
+      if (input.type === 'hidden' || input.type === 'submit') return;
+
+      const label = document.querySelector(`label[for="${input.id}"]`) || input.closest('label');
+      fields.push({
+        name: input.name || input.id,
+        type: input.tagName.toLowerCase(),
+        inputType: input.type,
+        label: label ? label.textContent.trim() : ''
+      });
+    });
+
+    return { fields };
+  }
+
+  function fillForm(data) {
+    if (!data || !data.structured) return;
+
+    for (const [name, value] of Object.entries(data.structured)) {
+      const input = document.querySelector(`[name="${name}"]`);
+      if (input) {
+        input.value = value;
+      }
+    }
+  }
+
   async function processWithAILogic(blob) {
+    const schema = analyzeForm();
     const app = firebase.initializeApp(firebaseConfig);
     const functions = firebase.getFunctions(app);
     const transcribeAudio = firebase.httpsCallable(functions, 'transcribeAudio');
@@ -285,8 +317,9 @@ if (window.__voxai_installed) {
     const audioBase64 = await blobToBase64(blob);
 
     try {
-      const result = await transcribeAudio({ audioBase64 });
+      const result = await transcribeAudio({ audioBase64, schema });
       console.log('VOX.AI: Firebase AI Logic response:', result.data);
+      fillForm(result.data);
     } catch (error) {
       console.error('VOX.AI: Firebase AI Logic call failed:', error);
       // Fallback to basic transcription if the cloud call fails
