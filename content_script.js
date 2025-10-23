@@ -65,10 +65,6 @@ if (window.__voxai_installed) {
 
     el.addEventListener('click', async () => {
       console.log('VOX.AI: Floating mic icon clicked.');
-      if (isStopping) {
-        console.log('VOX.AI: Still stopping, please wait.');
-        return;
-      }
       if (!el.dataset.recording) {
         const ok = await startRecording();
         if (ok && ok.success) {
@@ -94,7 +90,6 @@ if (window.__voxai_installed) {
   let currentStream = null;
   let recognizer = null;
   let fallbackTranscript = '';
-  let fallbackError = null;
   let isStopping = false;
 
   async function startRecording() {
@@ -123,7 +118,33 @@ if (window.__voxai_installed) {
       mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
-        processWithFirebase(blob);
+
+        // 1. Check for on-device model availability first.
+        const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
+        const onDeviceCheck = (e) => {
+          if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
+          window.removeEventListener('message', onDeviceCheck);
+
+          if (e.data.payload.isAvailable) {
+            // 2a. If available, send the audio to the in-page script for processing.
+            blob.arrayBuffer().then(buffer => {
+              window.postMessage({
+                voxai: 'PROCESS_AUDIO_INPAGE',
+                audioBuffer: buffer,
+                mimeType: 'audio/webm',
+                schema: null,
+                channel,
+                fallbackTranscript,
+              }, '*');
+            });
+          } else {
+            // 2b. If not available, proceed to the cloud fallback.
+            processWithAILogic(blob);
+          }
+        };
+        window.addEventListener('message', onDeviceCheck);
+        window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
+
         cleanupAudioResources();
       };
       mediaRecorder.start();
@@ -143,7 +164,7 @@ if (window.__voxai_installed) {
             }
             if (final.trim()) fallbackTranscript = final.trim();
           };
-          recognizer.onerror = (err) => { console.warn('VOX.AI SR error', err); fallbackError = String(err && err.error ? err.error : err); };
+          recognizer.onerror = (err) => { console.warn('VOX.AI SR error', err); };
           try { recognizer.start(); } catch (e) { console.error("VOX.AI: Failed to start SpeechRecognition", e); }
         }
       } catch (e) { /* ignore */ }
@@ -256,29 +277,21 @@ if (window.__voxai_installed) {
     });
   }
 
-  async function processWithFirebase(blob) {
+  async function processWithAILogic(blob) {
     const app = firebase.initializeApp(firebaseConfig);
-    const vertexai = firebase.getVertexAI(app);
-    const model = vertexai.getGenerativeModel({ model: "gemini-pro" });
+    const functions = firebase.getFunctions(app);
+    const transcribeAudio = firebase.httpsCallable(functions, 'transcribeAudio');
 
     const audioBase64 = await blobToBase64(blob);
 
-    const req = {
-      contents: [{
-        role: "user",
-        parts: [{ inlineData: { mimeType: "audio/webm", data: audioBase64 } }]
-      }]
-    };
-
     try {
-      const result = await model.generateContent(req);
-      // TODO: Process the response from the Firebase Gemini API
-      console.log('VOX.AI: Firebase Gemini response:', result);
+      const result = await transcribeAudio({ audioBase64 });
+      console.log('VOX.AI: Firebase AI Logic response:', result.data);
     } catch (error) {
-      console.error('VOX.AI: Firebase Gemini API request failed:', error);
+      console.error('VOX.AI: Firebase AI Logic call failed:', error);
       // Fallback to basic transcription if the cloud call fails
       if (fallbackTranscript) {
-        // Use the basic fallback
+        console.log('VOX.AI: Using fallback transcription:', fallbackTranscript);
       }
     }
   }
