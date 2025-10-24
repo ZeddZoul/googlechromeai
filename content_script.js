@@ -3,6 +3,48 @@
 // recording. Audio is forwarded to the injected in-page script (inpage.js)
 // which is responsible for calling the browser's built-in Prompt API.
 
+// --- New `getTranscription` using Firebase AI Logic SDK ---
+let firebaseModel;
+async function getTranscription(blob) {
+  if (!firebaseModel) {
+    try {
+      const firebaseApp = firebase.app.initializeApp(window.firebaseConfig);
+      const ai = firebase.ai.getAI(firebaseApp);
+      firebaseModel = firebase.ai.getGenerativeModel(ai, { model: "gemini-pro" });
+      console.log('VOX.AI: Firebase AI Logic SDK initialized for fallback.');
+    } catch (e) {
+      console.error('VOX.AI: Could not initialize Firebase AI Logic SDK for fallback.', e);
+      return null;
+    }
+  }
+
+  try {
+    const audioPart = {
+      inlineData: {
+        data: await blobToBase64(blob),
+        mimeType: blob.type,
+      },
+    };
+    const result = await firebaseModel.generateContent([
+      "Please transcribe this audio recording.",
+      audioPart
+    ]);
+    return result.response.text();
+  } catch (error) {
+    console.error('VOX.AI: Firebase AI Logic SDK transcription failed:', error);
+    return null;
+  }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 if (window.__voxai_installed) {
   console.debug('VOX.AI: content script already installed on this page');
 } else {
@@ -354,16 +396,16 @@ if (window.__voxai_installed) {
       
       // Fallback 1: Firebase transcription if on-device failed or unavailable
       if (!transcription) {
-        console.log('VOX.AI: Trying Firebase transcription...');
+        console.log('VOX.AI: Trying Firebase AI Logic SDK transcription...');
         try {
           transcription = await getTranscription(blob);
           if (transcription) {
-            console.log('VOX.AI: Firebase transcription successful:', transcription);
+            console.log('VOX.AI: Firebase AI Logic SDK transcription successful:', transcription);
           } else {
-            console.log('VOX.AI: Firebase transcription failed, using Web Speech API fallback');
+            console.log('VOX.AI: Firebase AI Logic SDK transcription failed, using Web Speech API fallback');
           }
         } catch (error) {
-          console.error('VOX.AI: Firebase transcription error:', error);
+          console.error('VOX.AI: Firebase AI Logic SDK transcription error:', error);
         }
       }
       
@@ -475,16 +517,6 @@ if (window.__voxai_installed) {
     console.log('VOX.AI: Cleanup complete. Ready to record again.');
   }
 
-
-  function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
   function analyzeForm() {
     const form = document.querySelector('form');
     if (!form) return null;
@@ -517,41 +549,6 @@ if (window.__voxai_installed) {
     }
   }
 
-  async function getTranscription(blob) {
-    console.log('VOX.AI: Starting Firebase transcription...');
-    try {
-      const audioBase64 = await blobToBase64(blob);
-      console.log('VOX.AI: Audio converted to base64, length:', audioBase64.length);
-      
-      if (!window.FirebaseApp) {
-        throw new Error('FirebaseApp not available');
-      }
-      if (!window.FirebaseFunctions) {
-        throw new Error('FirebaseFunctions not available');
-      }
-      if (!window.firebaseConfig) {
-        throw new Error('Firebase config not available');
-      }
-      
-      const app = window.FirebaseApp.initializeApp(window.firebaseConfig);
-      console.log('VOX.AI: Firebase app initialized');
-      
-      const functions = window.FirebaseFunctions.getFunctions(app);
-      console.log('VOX.AI: Firebase functions initialized');
-      
-      const transcribeAudio = window.FirebaseFunctions.httpsCallable(functions, 'transcribeAudio');
-      console.log('VOX.AI: Calling transcribeAudio function...');
-      
-      const result = await transcribeAudio({ audioBase64 });
-      console.log('VOX.AI: Firebase transcription result:', result);
-      
-      return result.data.transcription;
-    } catch (error) {
-      console.error('VOX.AI: Firebase transcription failed:', error);
-      return null;
-    }
-  }
-
   // Message API from popup
   chrome.runtime.onMessage.addListener((msg, sender, send) => {
     if (!msg || !msg.type) return;
@@ -580,3 +577,7 @@ if (window.__voxai_installed) {
   try { createFloatingMic(); } catch (e) { /* ignore for pages that restrict injection */ }
 
 } // end install guard
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { analyzeForm, fillForm, getTranscription, blobToBase64 };
+}
