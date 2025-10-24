@@ -1,29 +1,56 @@
-import { onFlow } from "@firebase/rules-unit-testing";
-import { gemini } from "@firebase/rules-unit-testing/ai";
+import { onCall } from "firebase-functions/v2/https";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const transcribeAudio = onFlow(
+export const transcribeAudio = onCall(
   {
-    // TODO: Add any necessary security rules here
+    // Security rules
+    cors: [
+      "https://chrome-extension://*",
+      "http://localhost:*",
+      "https://localhost:*",
+      "https://*.google.com",
+      "https://*.firebaseapp.com"
+    ],
   },
   async (request) => {
-    const apiKey = "YOUR_API_KEY"; // As requested for the hackathon
-    const model = gemini({ apiKey });
+    try {
+      // Get API key from environment or use your actual key
+      const apiKey = process.env.GEMINI_API_KEY || "YOUR_ACTUAL_GEMINI_API_KEY";
+      
+      if (!apiKey || apiKey === "YOUR_ACTUAL_GEMINI_API_KEY") {
+        throw new Error("Gemini API key not configured");
+      }
 
-    const { audioBase64 } = request.data;
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const prompt = "Please transcribe the following audio.";
+      const { audioBase64 } = request.data;
 
-    const result = await model.generateContent({
-      contents: [
-        { role: "user", parts: [{ text: prompt }] },
-        { role: "model", parts: [{ text: "Okay, I am ready to help. Please provide the audio." }] },
-        { role: "user", parts: [{ inlineData: { mimeType: "audio/webm", data: audioBase64 } }] }
-      ]
-    });
+      if (!audioBase64) {
+        throw new Error("No audio data provided");
+      }
 
-    const response = result.response;
-    const text = response.text();
+      const prompt = "Please transcribe the following audio. Return only the transcribed text, nothing else.";
 
-    return { transcription: text };
+      const result = await model.generateContent([
+        {
+          text: prompt
+        },
+        {
+          inlineData: {
+            mimeType: "audio/webm",
+            data: audioBase64
+          }
+        }
+      ]);
+
+      const response = await result.response;
+      const transcription = response.text();
+
+      return { transcription };
+    } catch (error) {
+      console.error("Transcription error:", error);
+      throw new Error(`Transcription failed: ${error.message}`);
+    }
   }
 );
