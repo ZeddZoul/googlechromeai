@@ -35,7 +35,7 @@ global.chrome = {
 };
 
 // Manually require the functions to be tested after setting up the DOM
-const { analyzeForm, fillForm, getTranscription, blobToBase64 } = require('./content_script');
+const { analyzeForm, fillForm, getTranscription, blobToBase64, processRecording } = require('./content_script');
 
 describe('Content script functionality', () => {
   // Set up the DOM before each test

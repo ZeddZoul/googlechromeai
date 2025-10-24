@@ -18,7 +18,7 @@
       "matches": ["<all_urls>"],
       "js": [
         "firebase-app.js",
-        "firebase-ai.js",
+        "firebase-functions.js",
         "firebase-config.js",
         "content_script.js"
       ],

@@ -535,38 +535,6 @@ if (window.__voxai_installed) {
     console.log('VOX.AI: Cleanup complete. Ready to record again.');
   }
 
-  function analyzeForm() {
-    const form = document.querySelector('form');
-    if (!form) return null;
-
-    const fields = [];
-    const inputs = form.querySelectorAll('input, textarea, select');
-    inputs.forEach(input => {
-      if (input.type === 'hidden' || input.type === 'submit') return;
-
-      const label = document.querySelector(`label[for="${input.id}"]`) || input.closest('label');
-      fields.push({
-        name: input.name || input.id,
-        type: input.tagName.toLowerCase(),
-        inputType: input.type,
-        label: label ? label.textContent.trim() : ''
-      });
-    });
-
-    return { fields };
-  }
-
-  function fillForm(data) {
-    if (!data || !data.structured) return;
-
-    for (const [name, value] of Object.entries(data.structured)) {
-      const input = document.querySelector(`[name="${name}"]`);
-      if (input) {
-        input.value = value;
-      }
-    }
-  }
-
   // Message API from popup
   chrome.runtime.onMessage.addListener((msg, sender, send) => {
     if (!msg || !msg.type) return;
