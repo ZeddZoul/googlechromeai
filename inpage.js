@@ -1,5 +1,7 @@
 // inpage.js - Handles on-device text-based inference.
-(function () {
+
+// This function wraps the entire script's logic to allow for controlled initialization in tests.
+function initializeVoxAIInpage() {
   if (window.__voxai_inpage_installed) return;
   window.__voxai_inpage_installed = true;
 
@@ -19,7 +21,7 @@
 
   async function ensureSession() {
     if (window.__voxai_languageModelSession) return window.__voxai_languageModelSession;
-    if (typeof LanguageModel === 'undefined') throw new Error('LanguageModel API not present');
+    if (typeof globalThis.LanguageModel === 'undefined') throw new Error('LanguageModel API not present');
 
     const sessionOptions = {
       monitor(m) {
@@ -27,11 +29,11 @@
       },
       ...modelCapabilities
     };
-    window.__voxai_languageModelSession = await LanguageModel.create(sessionOptions);
+    window.__voxai_languageModelSession = await globalThis.LanguageModel.create(sessionOptions);
     return window.__voxai_languageModelSession;
   }
 
-  window.addEventListener('message', async (ev) => {
+  const messageHandler = async (ev) => {
     if (!ev.data || !ev.data.voxai) return;
 
     if (ev.data.voxai === 'CHECK_ON_DEVICE') {
@@ -41,8 +43,8 @@
       console.log('VOX.AI: Checking on-device availability...');
       let isAvailable = false;
       try {
-        if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
-          const availability = await LanguageModel.availability(modelCapabilities);
+        if (typeof globalThis.LanguageModel !== 'undefined' && globalThis.LanguageModel.availability) {
+          const availability = await globalThis.LanguageModel.availability(modelCapabilities);
           isAvailable = availability !== 'unavailable';
           console.log('VOX.AI: LanguageModel availability:', availability);
         } else {
@@ -138,5 +140,17 @@
         respond(channel, { success: false, error: String(err) });
       }
     }
-  });
-})();
+  };
+
+  window.addEventListener('message', messageHandler);
+
+  // Expose the handler for cleanup in tests
+  return messageHandler;
+}
+
+// Expose the initialization function for tests and run it immediately in production.
+if (typeof module === 'undefined') {
+  initializeVoxAIInpage();
+} else {
+  module.exports = { initializeVoxAIInpage };
+}

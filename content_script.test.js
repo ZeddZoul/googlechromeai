@@ -13,13 +13,14 @@ global.firebase = {
     initializeApp: jest.fn(() => ({})),
   },
   ai: {
-    getAI: jest.fn(() => ({})),
-    getGenerativeModel: jest.fn(() => ({
-      generateContent: jest.fn().mockResolvedValue({
-        response: {
-          text: () => 'This is a test transcription.',
-        },
-      }),
+    getAI: jest.fn(() => ({
+      getGenerativeModel: jest.fn(() => ({
+        generateContent: jest.fn().mockResolvedValue({
+          response: {
+            text: () => 'This is a test transcription.',
+          },
+        }),
+      })),
     })),
   },
 };

@@ -3,39 +3,6 @@
 // recording. Audio is forwarded to the injected in-page script (inpage.js)
 // which is responsible for calling the browser's built-in Prompt API.
 
-// --- New `getTranscription` using Firebase AI Logic SDK ---
-let firebaseModel;
-async function getTranscription(blob) {
-  if (!firebaseModel) {
-    try {
-      const firebaseApp = firebase.app.initializeApp(window.firebaseConfig);
-      const ai = firebase.ai.getAI(firebaseApp);
-      firebaseModel = firebase.ai.getGenerativeModel(ai, { model: "gemini-pro" });
-      console.log('VOX.AI: Firebase AI Logic SDK initialized for fallback.');
-    } catch (e) {
-      console.error('VOX.AI: Could not initialize Firebase AI Logic SDK for fallback.', e);
-      return null;
-    }
-  }
-
-  try {
-    const audioPart = {
-      inlineData: {
-        data: await blobToBase64(blob),
-        mimeType: blob.type,
-      },
-    };
-    const result = await firebaseModel.generateContent([
-      "Please transcribe this audio recording.",
-      audioPart
-    ]);
-    return result.response.text();
-  } catch (error) {
-    console.error('VOX.AI: Firebase AI Logic SDK transcription failed:', error);
-    return null;
-  }
-}
-
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -43,6 +10,57 @@ function blobToBase64(blob) {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+async function getTranscription(blob) {
+  try {
+    const app = firebase.app.initializeApp(firebaseConfig);
+    const ai = firebase.ai.getAI(app);
+    const model = ai.getGenerativeModel({ model: 'gemini-pro' });
+    const audioBase64 = await blobToBase64(blob);
+    const result = await model.generateContent({
+      audio: {
+        mimeType: 'audio/webm',
+        data: audioBase64,
+      },
+    });
+    return result.response.text();
+  } catch (e) {
+    console.error('VOX.AI: Firebase transcription failed', e);
+    return null;
+  }
+}
+
+function analyzeForm() {
+  const form = document.querySelector('form');
+  if (!form) return null;
+
+  const fields = [];
+  const inputs = form.querySelectorAll('input, textarea, select');
+  inputs.forEach(input => {
+    if (input.type === 'hidden' || input.type === 'submit') return;
+
+    const label = document.querySelector(`label[for="${input.id}"]`) || input.closest('label');
+    fields.push({
+      name: input.name || input.id,
+      type: input.tagName.toLowerCase(),
+      inputType: input.type,
+      label: label ? label.textContent.trim() : ''
+    });
+  });
+
+  return { fields };
+}
+
+function fillForm(data) {
+  if (!data || !data.structured) return;
+
+  for (const [name, value] of Object.entries(data.structured)) {
+    const input = document.querySelector(`[name="${name}"]`);
+    if (input) {
+      input.value = value;
+    }
+  }
 }
 
 if (window.__voxai_installed) {
@@ -396,16 +414,16 @@ if (window.__voxai_installed) {
       
       // Fallback 1: Firebase transcription if on-device failed or unavailable
       if (!transcription) {
-        console.log('VOX.AI: Trying Firebase AI Logic SDK transcription...');
+        console.log('VOX.AI: Trying Firebase transcription...');
         try {
           transcription = await getTranscription(blob);
           if (transcription) {
-            console.log('VOX.AI: Firebase AI Logic SDK transcription successful:', transcription);
+            console.log('VOX.AI: Firebase transcription successful:', transcription);
           } else {
-            console.log('VOX.AI: Firebase AI Logic SDK transcription failed, using Web Speech API fallback');
+            console.log('VOX.AI: Firebase transcription failed, using Web Speech API fallback');
           }
         } catch (error) {
-          console.error('VOX.AI: Firebase AI Logic SDK transcription error:', error);
+          console.error('VOX.AI: Firebase transcription error:', error);
         }
       }
       
