@@ -16,11 +16,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": [
-        "firebase-app.js",
-        "firebase-config.js",
-        "content_script.js"
-      ],
+      "js": ["content_script.js"],
       "run_at": "document_idle"
     }
   ],

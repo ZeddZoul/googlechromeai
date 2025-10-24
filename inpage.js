@@ -5,8 +5,10 @@
 
   function respond(channel, payload) {
     try {
+      console.log('VOX.AI: inpage.js responding on channel:', channel, 'with payload:', payload);
       window.postMessage({ channel, payload }, '*');
     } catch (e) {
+      console.error('VOX.AI: inpage.js respond error:', e);
       const safe = { success: false, error: 'Failed to post response: ' + String(e) };
       window.postMessage({ channel, payload: safe }, '*');
     }
@@ -67,7 +69,7 @@
       try {
         const session = await ensureSession();
         console.log('VOX.AI: Session created for audio processing...');
-        
+
         const prompt = `Please transcribe the following audio. Return only the transcribed text, nothing else.`;
 
         console.log('VOX.AI: Calling session.prompt for audio transcription...');
@@ -78,9 +80,9 @@
             { role: "user", parts: [{ inlineData: { mimeType: "audio/webm", data: audioBase64 } }] }
           ]
         });
-        
+
         console.log('VOX.AI: Audio transcription result:', result);
-        
+
         // Check if the result is actually a transcription or just a generic response
         if (result && result.length > 10 && !result.includes("paste the audio") && !result.includes("transcribe it")) {
           respond(channel, { success: true, result: { transcription: result } });
@@ -102,9 +104,11 @@
       console.log('VOX.AI: Form schema:', schema);
 
       try {
+        // This extension REQUIRES Gemini Nano - no fallback
+        console.log('VOX.AI: Using on-device Gemini Nano for form extraction');
         const session = await ensureSession();
         console.log('VOX.AI: Session created, generating prompt...');
-        
+
         const prompt = `
           You are a helpful assistant that fills out web forms.
           Based on the following transcription, fill out the form fields described in the JSON schema.
@@ -119,7 +123,7 @@
         console.log('VOX.AI: Calling session.prompt...');
         const result = await session.prompt(prompt);
         console.log('VOX.AI: Session prompt result:', result);
-        
+
         // Extract JSON from markdown format if present
         let jsonString = result;
         if (result.includes('```json')) {
@@ -128,10 +132,10 @@
             jsonString = jsonMatch[1].trim();
           }
         }
-        
+
         console.log('VOX.AI: Extracted JSON string:', jsonString);
         const json = JSON.parse(jsonString);
-        console.log('VOX.AI: Parsed JSON:', json);
+        console.log('VOX.AI: Final parsed data:', json);
         respond(channel, { success: true, result: json });
       } catch (err) {
         console.error('VOX.AI inpage error', err);

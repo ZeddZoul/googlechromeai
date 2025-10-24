@@ -3,7 +3,9 @@
 // recording. Audio is forwarded to the injected in-page script (inpage.js)
 // which is responsible for calling the browser's built-in Prompt API.
 
-// --- New `getTranscription` using Firebase AI Logic SDK ---
+// --- Firebase transcription function (disabled - requires backend setup) ---
+// Uncomment and configure if you have Firebase Functions deployed
+/*
 let firebaseModel;
 async function getTranscription(blob) {
   if (!firebaseModel) {
@@ -35,6 +37,7 @@ async function getTranscription(blob) {
     return null;
   }
 }
+*/
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -90,7 +93,7 @@ if (window.__voxai_installed) {
     el.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
     el.style.transform = 'scale(1)';
     el.title = 'VOX.AI — click to start/stop recording';
-    
+
     // Add hover effects
     el.addEventListener('mouseenter', () => {
       if (!recordingState.isRecording && !recordingState.isInitializing && !recordingState.isStopping) {
@@ -98,25 +101,25 @@ if (window.__voxai_installed) {
         el.style.boxShadow = '0 12px 40px rgba(0,0,0,0.2)';
       }
     });
-    
+
     el.addEventListener('mouseleave', () => {
       if (!recordingState.isRecording) {
         el.style.transform = 'scale(1)';
         el.style.boxShadow = '0 8px 30px rgba(0,0,0,0.15)';
       }
     });
-    
+
     // Add click animation
     el.addEventListener('mousedown', () => {
       el.style.transform = 'scale(0.95)';
     });
-    
+
     el.addEventListener('mouseup', () => {
       if (!recordingState.isRecording) {
         el.style.transform = 'scale(1.05)';
       }
     });
-    
+
     // Inner structure: waveform container + central mic button
     el.innerHTML = `
       <div id="voxai-wave" style="position:absolute;inset:8px;border-radius:28px;pointer-events:none;display:flex;align-items:center;justify-content:center;">
@@ -133,7 +136,7 @@ if (window.__voxai_installed) {
       <div id="voxai-status" style="position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;background:#4CAF50;display:none;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
         <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.5s infinite;"></div>
       </div>`;
-    
+
     // Add CSS animations
     const style = document.createElement('style');
     style.textContent = `
@@ -152,7 +155,7 @@ if (window.__voxai_installed) {
       }
     `;
     document.head.appendChild(style);
-    
+
     document.body.appendChild(el);
 
     // cache a reference to the inner level element for real-time updates
@@ -160,13 +163,13 @@ if (window.__voxai_installed) {
 
     el.addEventListener('click', async () => {
       console.log('VOX.AI: Floating mic icon clicked.');
-      
+
       // Prevent multiple simultaneous operations
       if (recordingState.isInitializing || recordingState.isStopping) {
         console.log('VOX.AI: Operation already in progress, ignoring click.');
         return;
       }
-      
+
       if (!recordingState.isRecording) {
         await handleStartRecording(el);
       } else {
@@ -194,7 +197,7 @@ if (window.__voxai_installed) {
   async function handleStartRecording(el) {
     console.log('VOX.AI: Starting recording...');
     recordingState.isInitializing = true;
-    
+
     try {
       // Request microphone access - SINGLE CALL
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -219,19 +222,22 @@ if (window.__voxai_installed) {
         mimeType: 'audio/webm;codecs=opus'
       });
       recordingState.chunks = [];
-      recordingState.mediaRecorder.ondataavailable = e => { 
+      recordingState.mediaRecorder.ondataavailable = e => {
         if (e.data && e.data.size) {
           recordingState.chunks.push(e.data);
           console.log('VOX.AI: Audio chunk received, size:', e.data.size);
         }
       };
-      
+
       recordingState.mediaRecorder.onstop = async () => {
         const blob = new Blob(recordingState.chunks, { type: 'audio/webm' });
-        await processRecording(blob);
+        // Save the transcript BEFORE cleanup (cleanup will clear it)
+        const savedTranscript = recordingState.fallbackTranscript;
+        console.log('VOX.AI: Saved transcript before cleanup:', savedTranscript);
         cleanupAudioResources();
+        await processRecording(blob, savedTranscript);
       };
-      
+
       recordingState.mediaRecorder.start(100); // Collect data every 100ms
       console.log('VOX.AI: MediaRecorder started with 100ms intervals');
 
@@ -242,37 +248,59 @@ if (window.__voxai_installed) {
           recordingState.recognizer = new SpeechRecognition();
           recordingState.recognizer.lang = 'en-US';
           recordingState.recognizer.interimResults = true;
+          recordingState.recognizer.continuous = true; // Keep recognition running
           recordingState.fallbackTranscript = '';
+
           recordingState.recognizer.onresult = (ev) => {
-            let final = '';
+            // Accumulate all results (both interim and final)
+            let transcript = '';
             for (let i = 0; i < ev.results.length; i++) {
-              if (ev.results[i].isFinal) final += ev.results[i][0].transcript + ' ';
+              transcript += ev.results[i][0].transcript + ' ';
             }
-            if (final.trim()) recordingState.fallbackTranscript = final.trim();
+            // Always update with the latest transcript
+            if (transcript.trim()) {
+              recordingState.fallbackTranscript = transcript.trim();
+              console.log('VOX.AI: Speech recognition interim/final:', recordingState.fallbackTranscript);
+            }
           };
-          recordingState.recognizer.onerror = (err) => { console.warn('VOX.AI SR error', err); };
-          try { recordingState.recognizer.start(); } catch (e) { console.error("VOX.AI: Failed to start SpeechRecognition", e); }
+
+          recordingState.recognizer.onerror = (err) => {
+            console.warn('VOX.AI: SpeechRecognition error', err);
+          };
+
+          recordingState.recognizer.onend = () => {
+            console.log('VOX.AI: SpeechRecognition ended, final transcript:', recordingState.fallbackTranscript);
+          };
+
+          try {
+            recordingState.recognizer.start();
+            console.log('VOX.AI: SpeechRecognition started');
+          } catch (e) {
+            console.error("VOX.AI: Failed to start SpeechRecognition", e);
+          }
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        console.error('VOX.AI: SpeechRecognition not available', e);
+      }
 
       // Start the analyser draw loop if available
       if (recordingState.analyser) startAnalyseLoop();
-      
+
       // Update UI state
       recordingState.isRecording = true;
       recordingState.isInitializing = false;
       el.dataset.recording = '1';
       el.style.background = '#ff6b6b';
       el.classList.add('voxai-recording');
-      
+
       // Show recording status indicator
       const statusEl = el.querySelector('#voxai-status');
       if (statusEl) {
         statusEl.style.display = 'flex';
       }
-      
+
       console.log('VOX.AI: Recording started.');
-      
+
     } catch (err) {
       console.error('VOX.AI: Failed to start recording:', err);
       recordingState.isInitializing = false;
@@ -283,14 +311,14 @@ if (window.__voxai_installed) {
   async function handleStopRecording(el) {
     console.log('VOX.AI: Stopping recording...');
     recordingState.isStopping = true;
-    
+
     try {
       // Stop analyser UI loop immediately
-      if (recordingState.rafId) { 
-        cancelAnimationFrame(recordingState.rafId); 
-        recordingState.rafId = null; 
+      if (recordingState.rafId) {
+        cancelAnimationFrame(recordingState.rafId);
+        recordingState.rafId = null;
       }
-      
+
       const levelEl = el && el._levelEl;
       if (levelEl) {
         levelEl.style.transform = 'scale(1)';
@@ -307,22 +335,22 @@ if (window.__voxai_installed) {
         // If the recorder is already stopped, trigger cleanup manually
         cleanupAudioResources();
       }
-      
+
       // Update UI state
       recordingState.isRecording = false;
       recordingState.isStopping = false;
       delete el.dataset.recording;
       el.style.background = '#FFD700';
       el.classList.remove('voxai-recording');
-      
+
       // Hide recording status indicator
       const statusEl = el.querySelector('#voxai-status');
       if (statusEl) {
         statusEl.style.display = 'none';
       }
-      
+
       console.log('VOX.AI: Recording stopped.');
-      
+
     } catch (err) {
       console.error('VOX.AI: Error stopping recording:', err);
       recordingState.isStopping = false;
@@ -330,10 +358,11 @@ if (window.__voxai_installed) {
     }
   }
 
-  async function processRecording(blob) {
+  async function processRecording(blob, savedTranscript) {
     console.log('VOX.AI: Processing recording...');
+    console.log('VOX.AI: Received transcript:', savedTranscript);
     const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
-    
+
     const onDeviceCheck = async (e) => {
       if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
       window.removeEventListener('message', onDeviceCheck);
@@ -341,84 +370,57 @@ if (window.__voxai_installed) {
       console.log('VOX.AI: Device check response:', e.data.payload);
 
       let transcription = null;
-      
-      // Hybrid AI Strategy: Try on-device first, then Firebase, then Web Speech API
-      if (e.data.payload.isAvailable) {
-        console.log('VOX.AI: On-device AI available, trying on-device transcription first...');
-        try {
-          const audioBase64 = await blobToBase64(blob);
-          const onDeviceChannel = `voxai_ondevice_${Math.random().toString(36).slice(2)}`;
-          
-          const onDeviceResponse = async (e) => {
-            if (!e.data || e.data.channel !== onDeviceChannel || typeof e.data.payload === 'undefined') return;
-            window.removeEventListener('message', onDeviceResponse);
-            
-            if (e.data.payload.success && e.data.payload.result.transcription) {
-              transcription = e.data.payload.result.transcription;
-              console.log('VOX.AI: On-device transcription successful:', transcription);
-            } else {
-              console.log('VOX.AI: On-device transcription failed, trying Firebase...');
-              transcription = null; // Will trigger Firebase fallback
-            }
-          };
-          
-          window.addEventListener('message', onDeviceResponse);
-          window.postMessage({
-            voxai: 'PROCESS_AUDIO_INPAGE',
-            audioBase64: audioBase64,
-            channel: onDeviceChannel
-          }, '*');
-          
-          // Wait for on-device response (with timeout)
-          await new Promise((resolve) => {
-            const timeout = setTimeout(() => {
-              window.removeEventListener('message', onDeviceResponse);
-              console.log('VOX.AI: On-device transcription timeout, trying Firebase...');
-              transcription = null; // Will trigger Firebase fallback
-              resolve();
-            }, 5000); // 5 second timeout for on-device
-            
-            const originalHandler = onDeviceResponse;
-            const wrappedHandler = (e) => {
-              originalHandler(e);
-              clearTimeout(timeout);
-              resolve();
-            };
-            window.removeEventListener('message', onDeviceResponse);
-            window.addEventListener('message', wrappedHandler);
-          });
-          
-        } catch (error) {
-          console.error('VOX.AI: On-device transcription error:', error);
-          transcription = null; // Will trigger Firebase fallback
-        }
-      }
-      
-      // Fallback 1: Firebase transcription if on-device failed or unavailable
-      if (!transcription) {
-        console.log('VOX.AI: Trying Firebase AI Logic SDK transcription...');
-        try {
-          transcription = await getTranscription(blob);
-          if (transcription) {
-            console.log('VOX.AI: Firebase AI Logic SDK transcription successful:', transcription);
-          } else {
-            console.log('VOX.AI: Firebase AI Logic SDK transcription failed, using Web Speech API fallback');
-          }
-        } catch (error) {
-          console.error('VOX.AI: Firebase AI Logic SDK transcription error:', error);
-        }
-      }
-      
-      // Fallback 2: Web Speech API if both on-device and Firebase failed
-      if (!transcription) {
-        console.log('VOX.AI: Using Web Speech API fallback transcript:', recordingState.fallbackTranscript);
-        transcription = recordingState.fallbackTranscript;
+
+      // Check if on-device AI (Gemini Nano) is available
+      if (!e.data.payload.isAvailable) {
+        console.error('VOX.AI: Gemini Nano is NOT available on this device!');
+        console.error('VOX.AI: This extension requires Gemini Nano to extract form data.');
+        console.error('VOX.AI: Please use a device with Gemini Nano support.');
+        alert('VOX.AI requires Gemini Nano (on-device AI) to work.\n\nThis device is not eligible for running the on-device model.\n\nPlease use a supported device with Gemini Nano enabled.');
+        return;
       }
 
-      if (transcription) {
+      console.log('VOX.AI: Gemini Nano is available! ✅');
+
+      // Use the saved Web Speech API transcript
+      transcription = savedTranscript;
+
+      if (transcription && transcription.trim() !== '') {
         console.log('VOX.AI: Final transcription result:', transcription);
         const schema = analyzeForm();
         console.log('VOX.AI: Form schema:', schema);
+
+        // Setup listener for inpage response
+        const onInpageResponse = (e) => {
+          console.log('VOX.AI: Received message in onInpageResponse:', e.data);
+
+          // Ignore messages that are requests (have 'voxai' property)
+          if (e.data && e.data.voxai) {
+            console.log('VOX.AI: Ignoring request message with voxai:', e.data.voxai);
+            return;
+          }
+
+          if (!e.data || e.data.channel !== channel) {
+            console.log('VOX.AI: Message channel mismatch or no data. Expected:', channel, 'Got:', e.data?.channel);
+            return;
+          }
+
+          window.removeEventListener('message', onInpageResponse);
+          console.log('VOX.AI: Channel matched! Processing response...');
+          console.log('VOX.AI: e.data.payload:', e.data.payload);
+          console.log('VOX.AI: e.data.payload.success:', e.data.payload?.success);
+          console.log('VOX.AI: e.data.payload.result:', e.data.payload?.result);
+
+          if (e.data.payload && e.data.payload.success) {
+            console.log('VOX.AI: Form data extraction successful:', e.data.payload.result);
+            fillForm(e.data.payload.result);
+          } else {
+            console.error('VOX.AI: Form data extraction failed. Payload:', e.data.payload);
+          }
+        };
+        window.addEventListener('message', onInpageResponse);
+        console.log('VOX.AI: Listener added for channel:', channel);
+
         window.postMessage({
           voxai: 'PROCESS_TEXT_INPAGE',
           text: transcription,
@@ -429,7 +431,7 @@ if (window.__voxai_installed) {
         console.log('VOX.AI: No transcription available');
       }
     };
-    
+
     window.addEventListener('message', onDeviceCheck);
     window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
   }
@@ -481,7 +483,7 @@ if (window.__voxai_installed) {
     if (recordingState.analyser) recordingState.analyser.disconnect();
     if (recordingState.sourceNode) recordingState.sourceNode.disconnect();
     if (recordingState.audioContext) {
-      recordingState.audioContext.close().catch(() => {});
+      recordingState.audioContext.close().catch(() => { });
       recordingState.audioContext = null;
     }
 
@@ -494,26 +496,26 @@ if (window.__voxai_installed) {
     recordingState.isStopping = false;
     recordingState.chunks = [];
     recordingState.fallbackTranscript = '';
-    
+
     // Reset UI state
     const el = document.getElementById(FLOAT_ID);
     if (el) {
       el.style.background = '#FFD700';
       el.classList.remove('voxai-recording');
       delete el.dataset.recording;
-      
+
       const statusEl = el.querySelector('#voxai-status');
       if (statusEl) {
         statusEl.style.display = 'none';
       }
-      
+
       const levelEl = el._levelEl;
       if (levelEl) {
         levelEl.style.transform = 'scale(1)';
         levelEl.style.background = '#111';
       }
     }
-    
+
     console.log('VOX.AI: Cleanup complete. Ready to record again.');
   }
 
@@ -539,36 +541,89 @@ if (window.__voxai_installed) {
   }
 
   function fillForm(data) {
-    if (!data || !data.structured) return;
+    console.log('VOX.AI: fillForm() called with data:', data);
+
+    if (!data || !data.structured) {
+      console.warn('VOX.AI: No structured data to fill form');
+      return;
+    }
+
+    console.log('VOX.AI: Filling form with data:', data.structured);
+    let filledCount = 0;
 
     for (const [name, value] of Object.entries(data.structured)) {
-      const input = document.querySelector(`[name="${name}"]`);
-      if (input) {
-        input.value = value;
+      console.log(`VOX.AI: Processing field: ${name} = ${value}`);
+
+      // Try to find input by name attribute
+      let inputs = document.querySelectorAll(`[name="${name}"]`);
+      console.log(`VOX.AI: Found ${inputs.length} inputs for name="${name}"`);
+
+      if (inputs.length === 0) {
+        // Try by id if name doesn't work
+        const inputById = document.getElementById(name);
+        if (inputById) inputs = [inputById];
+      }
+
+      if (inputs.length > 0) {
+        inputs.forEach(input => {
+          if (input.type === 'radio') {
+            // For radio buttons, find the one matching the value
+            if (input.value.toLowerCase() === value.toLowerCase()) {
+              input.checked = true;
+              filledCount++;
+              console.log(`VOX.AI: Filled radio ${name} = ${value}`);
+            }
+          } else if (input.tagName.toLowerCase() === 'select') {
+            // For select elements, try to find matching option
+            const options = Array.from(input.options);
+            const matchingOption = options.find(opt =>
+              opt.value.toLowerCase().includes(value.toLowerCase()) ||
+              opt.text.toLowerCase().includes(value.toLowerCase())
+            );
+            if (matchingOption) {
+              input.value = matchingOption.value;
+              filledCount++;
+              console.log(`VOX.AI: Filled select ${name} = ${matchingOption.value}`);
+            }
+          } else {
+            // For text inputs and textareas
+            input.value = value;
+            filledCount++;
+            console.log(`VOX.AI: Filled ${input.tagName} ${name} = ${value}`);
+          }
+
+          // Trigger change event
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      } else {
+        console.warn(`VOX.AI: Could not find form field: ${name}`);
       }
     }
+
+    console.log(`VOX.AI: Form filling complete. ${filledCount} fields filled.`);
   }
 
   // Message API from popup
   chrome.runtime.onMessage.addListener((msg, sender, send) => {
     if (!msg || !msg.type) return;
-    if (msg.type === 'START_RECORDING') { 
+    if (msg.type === 'START_RECORDING') {
       const el = document.getElementById(FLOAT_ID);
       if (el) {
         handleStartRecording(el).then(() => send({ success: true }));
       } else {
         send({ success: false, error: 'UI not ready' });
       }
-      return true; 
+      return true;
     }
-    if (msg.type === 'STOP_RECORDING') { 
+    if (msg.type === 'STOP_RECORDING') {
       const el = document.getElementById(FLOAT_ID);
       if (el) {
         handleStopRecording(el).then(() => send({ success: true }));
       } else {
         send({ success: false, error: 'UI not ready' });
       }
-      return true; 
+      return true;
     }
   });
 
