@@ -119,28 +119,30 @@ if (window.__voxai_installed) {
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
 
-        // 1. Check for on-device model availability first.
         const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
-        const onDeviceCheck = (e) => {
+        const onDeviceCheck = async (e) => {
           if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
           window.removeEventListener('message', onDeviceCheck);
 
+          let transcription = null;
           if (e.data.payload.isAvailable) {
-            // 2a. If available, send the audio to the in-page script for processing.
-            blob.arrayBuffer().then(buffer => {
-              window.postMessage({
-                voxai: 'PROCESS_AUDIO_INPAGE',
-                audioBuffer: buffer,
-                mimeType: 'audio/webm',
-                schema: null,
-                channel,
-                fallbackTranscript,
-              }, '*');
-            });
+            // On-device transcription would go here if it worked.
+            // For now, we'll just use the fallback transcript.
+            transcription = fallbackTranscript;
           } else {
-            // 2b. If not available, proceed to the cloud fallback.
-            processWithAILogic(blob);
+            transcription = await getTranscription(blob);
           }
+
+          if (transcription) {
+            const schema = analyzeForm();
+            window.postMessage({
+              voxai: 'PROCESS_TEXT_INPAGE',
+              text: transcription,
+              schema: schema,
+              channel
+            }, '*');
+          }
+
           cleanupAudioResources();
         };
         window.addEventListener('message', onDeviceCheck);
@@ -308,24 +310,18 @@ if (window.__voxai_installed) {
     }
   }
 
-  async function processWithAILogic(blob) {
-    const schema = analyzeForm();
+  async function getTranscription(blob) {
+    const audioBase64 = await blobToBase64(blob);
     const app = firebase.initializeApp(firebaseConfig);
     const functions = firebase.getFunctions(app);
     const transcribeAudio = firebase.httpsCallable(functions, 'transcribeAudio');
 
-    const audioBase64 = await blobToBase64(blob);
-
     try {
-      const result = await transcribeAudio({ audioBase64, schema });
-      console.log('VOX.AI: Firebase AI Logic response:', result.data);
-      fillForm(result.data);
+      const result = await transcribeAudio({ audioBase64 });
+      return result.data.transcription;
     } catch (error) {
       console.error('VOX.AI: Firebase AI Logic call failed:', error);
-      // Fallback to basic transcription if the cloud call fails
-      if (fallbackTranscript) {
-        console.log('VOX.AI: Using fallback transcription:', fallbackTranscript);
-      }
+      return null;
     }
   }
 
