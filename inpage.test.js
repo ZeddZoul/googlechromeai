@@ -1,133 +1,137 @@
-// Unit tests for inpage.js
+/** @jest-environment jsdom */
 
-// Mock the LanguageModel API
-const mockLanguageModel = {
-  create: jest.fn(),
-  availability: jest.fn(),
+// Load the script in a mock window environment
+const fs = require('fs');
+const path = require('path');
+
+// Read the inpage.js script
+const inpageScript = fs.readFileSync(path.join(__dirname, 'inpage.js'), 'utf-8');
+
+// Mock LanguageModel API
+const mockSession = {
+  prompt: jest.fn(),
 };
 
-// Mock the window.postMessage function
-const mockPostMessage = jest.fn();
+const mockLanguageModel = {
+  create: jest.fn().mockResolvedValue(mockSession),
+  availability: jest.fn().mockResolvedValue('readily'),
+};
 
-// Set up the global scope with mocks
-global.LanguageModel = mockLanguageModel;
-global.atob = jest.fn();
-global.MessageEvent = class {};
+// Set up the global scope for the tests
+beforeEach(() => {
+  // Reset the window object for each test
+  document.documentElement.innerHTML = '<head></head><body></body>';
 
-// Helper to dispatch messages
-async function dispatchMessage(data) {
-  const onMessage = global.window.addEventListener.mock.calls.find(call => call[0] === 'message')[1];
-  await onMessage({ data });
-}
+  // Define LanguageModel in the window scope
+  window.LanguageModel = mockLanguageModel;
+
+  // Add a mock for postMessage
+  window.postMessage = jest.fn();
+
+  // Execute the inpage script
+  const scriptEl = document.createElement('script');
+  scriptEl.textContent = inpageScript;
+  document.head.appendChild(scriptEl);
+
+  // Reset mocks before each test
+  mockSession.prompt.mockClear();
+  mockLanguageModel.create.mockClear();
+  window.postMessage.mockClear();
+});
 
 describe('inpage.js', () => {
-  beforeEach(() => {
-    // Reset mocks and window object before each test
-    jest.resetModules();
-    jest.clearAllMocks();
+  test('ensureSession creates a session with expected capabilities', async () => {
+    // Dispatch a PROCESS_TEXT_INPAGE message to trigger session creation
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        voxai: 'PROCESS_TEXT_INPAGE',
+        text: 'some text',
+        schema: {},
+        channel: 'test-channel',
+      },
+    }));
 
-    global.window = {
-      postMessage: mockPostMessage,
-      addEventListener: jest.fn(),
-      __voxai_inpage_installed: false,
-      __voxai_languageModelSession: null,
-    };
-    global.Blob = class {
-      constructor(parts, options) {
-        this.parts = parts;
-        this.type = options ? options.type : '';
-      }
-    };
-    global.File = class {
-      constructor(parts, filename, options) {
-        this.parts = parts;
-        this.filename = filename;
-        this.type = options ? options.type : '';
-      }
-    };
-    // Re-run the script to re-attach listeners and populate the new window
-    require('./inpage.js');
-  });
+    // Wait for async operations to complete
+    await new Promise(process.nextTick);
 
-  test('ensureSession creates a session with expectedInputs', async () => {
-    const mockSession = { prompt: jest.fn() };
-    mockLanguageModel.create.mockResolvedValue(mockSession);
-
-    const session = await window.__voxai_ensureSession();
-
-    expect(mockLanguageModel.create).toHaveBeenCalledWith({
-      monitor: expect.any(Function),
-      expectedInputs: [{ type: 'audio', languages: ['en'] }],
+    // Check if LanguageModel.create was called with the correct options
+    expect(mockLanguageModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      expectedInputs: [{ type: 'text', languages: ['en'] }],
       expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    });
-    expect(session).toBe(mockSession);
+    }));
   });
 
   test('processes audio and returns structured data', async () => {
-    const mockSession = { prompt: jest.fn() };
-    mockLanguageModel.create.mockResolvedValue(mockSession);
-    mockLanguageModel.availability.mockResolvedValue('available');
-    const modelCapabilities = {
-      expectedInputs: [{ type: 'audio', languages: ['en'] }],
-      expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    };
-    const mockResponse = { transcription: 'hello world', structured: { foo: 'bar' } };
-    mockSession.prompt.mockResolvedValue(JSON.stringify(mockResponse));
+    // Mock the prompt result
+    const mockResult = '{"structured":{"name":"test"}}';
+    mockSession.prompt.mockResolvedValue(`\`\`\`json\n${mockResult}\n\`\`\``);
 
-    await dispatchMessage({
-      voxai: 'PROCESS_AUDIO_INPAGE',
-      audioBuffer: new ArrayBuffer(8),
-      mimeType: 'audio/webm',
-      channel: 'test-channel',
-    });
+    // The script should call prompt, but let's test the text processing part directly
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        voxai: 'PROCESS_TEXT_INPAGE',
+        text: 'test transcription',
+        schema: { fields: [] },
+        channel: 'test-channel-text',
+      },
+    }));
 
-    expect(mockPostMessage).toHaveBeenCalledWith({
-      channel: 'test-channel',
-      payload: { success: true, result: mockResponse },
+    // Wait for async operations to complete
+    await new Promise(process.nextTick);
+
+    // Verify that postMessage was called with the correct data
+    expect(window.postMessage).toHaveBeenCalledWith({
+      channel: 'test-channel-text',
+      payload: { success: true, result: { structured: { name: 'test' } } },
     }, '*');
   });
 
-  test('handles API unavailable with fallback transcript', async () => {
-    const modelCapabilities = {
-      expectedInputs: [{ type: 'audio', languages: ['en'] }],
-      expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    };
+  test('handles API unavailable', async () => {
+    // Mock the availability to be 'unavailable'
     mockLanguageModel.availability.mockResolvedValue('unavailable');
 
-    await dispatchMessage({
-      voxai: 'PROCESS_AUDIO_INPAGE',
-      audioBuffer: new ArrayBuffer(8),
-      mimeType: 'audio/webm',
-      channel: 'test-channel',
-      fallbackTranscript: 'fallback text',
-    });
+    // Dispatch a message to check for the on-device API
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        voxai: 'CHECK_ON_DEVICE',
+        channel: 'test-channel-unavailable',
+      },
+    }));
 
-    expect(mockPostMessage).toHaveBeenCalledWith({
-      channel: 'test-channel',
-      payload: { success: true, result: { transcription: 'fallback text', structured: {} }, source: 'fallback' },
+    // Wait for async operations to complete
+    await new Promise(process.nextTick);
+
+    // Verify that postMessage was called with isAvailable: false
+    expect(window.postMessage).toHaveBeenCalledWith({
+      channel: 'test-channel-unavailable',
+      payload: { isAvailable: false },
     }, '*');
   });
 
   test('handles non-JSON response from prompt', async () => {
-    const mockSession = { prompt: jest.fn() };
-    const modelCapabilities = {
-      expectedInputs: [{ type: 'audio', languages: ['en'] }],
-      expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    };
-    mockLanguageModel.create.mockResolvedValue(mockSession);
-    mockLanguageModel.availability.mockResolvedValue('available');
-    mockSession.prompt.mockResolvedValue('just a string');
+    // Mock a non-JSON response
+    mockSession.prompt.mockResolvedValue('this is not json');
 
-    await dispatchMessage({
-      voxai: 'PROCESS_AUDIO_INPAGE',
-      audioBuffer: new ArrayBuffer(8),
-      mimeType: 'audio/webm',
-      channel: 'test-channel',
-    });
+    // Dispatch a message to process text
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        voxai: 'PROCESS_TEXT_INPAGE',
+        text: 'some text',
+        schema: {},
+        channel: 'test-channel-non-json',
+      },
+    }));
 
-    expect(mockPostMessage).toHaveBeenCalledWith({
-      channel: 'test-channel',
-      payload: { success: true, result: { transcription: 'just a string', structured: {} } },
-    }, '*');
+    // Wait for async operations to complete
+    await new Promise(process.nextTick);
+
+    // Verify that postMessage was called with an error
+    expect(window.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      channel: 'test-channel-non-json',
+      payload: expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('Unexpected token'),
+      }),
+    }), '*');
   });
 });

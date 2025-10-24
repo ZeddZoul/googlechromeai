@@ -517,6 +517,18 @@ if (window.__voxai_installed) {
     }
   }
 
+  // Listener for final results from the in-page script
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data || !e.data.channel || !e.data.channel.startsWith('voxai_resp_')) {
+      return;
+    }
+
+    if (e.data.payload && e.data.payload.result && e.data.payload.result.structured) {
+      console.log('VOX.AI: Received structured data from inpage:', e.data.payload.result);
+      fillForm(e.data.payload.result);
+    }
+  });
+
   async function getTranscription(blob) {
     console.log('VOX.AI: Starting Firebase transcription...');
     try {
@@ -580,3 +592,7 @@ if (window.__voxai_installed) {
   try { createFloatingMic(); } catch (e) { /* ignore for pages that restrict injection */ }
 
 } // end install guard
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { analyzeForm, fillForm };
+}
