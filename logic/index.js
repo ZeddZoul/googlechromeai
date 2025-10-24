@@ -9,13 +9,16 @@ export const transcribeAudio = onFlow(
     const apiKey = "YOUR_API_KEY"; // As requested for the hackathon
     const model = gemini({ apiKey });
 
-    const audioBase64 = request.data.audioBase64;
+    const { audioBase64 } = request.data;
+
+    const prompt = "Please transcribe the following audio.";
 
     const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{ inlineData: { mimeType: "audio/webm", data: audioBase64 } }]
-      }]
+      contents: [
+        { role: "user", parts: [{ text: prompt }] },
+        { role: "model", parts: [{ text: "Okay, I am ready to help. Please provide the audio." }] },
+        { role: "user", parts: [{ inlineData: { mimeType: "audio/webm", data: audioBase64 } }] }
+      ]
     });
 
     const response = result.response;
