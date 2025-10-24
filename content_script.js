@@ -65,105 +65,192 @@ if (window.__voxai_installed) {
 
     el.addEventListener('click', async () => {
       console.log('VOX.AI: Floating mic icon clicked.');
-      if (isStopping) {
-        console.log('VOX.AI: Still stopping, please wait.');
+      
+      // Prevent multiple simultaneous operations
+      if (recordingState.isInitializing || recordingState.isStopping) {
+        console.log('VOX.AI: Operation already in progress, ignoring click.');
         return;
       }
-      if (!el.dataset.recording) {
-        const ok = await startRecording();
-        if (ok && ok.success) {
-          console.log('VOX.AI: Recording started.');
-          el.dataset.recording = '1';
-          el.style.background = '#ff6b6b';
-        }
+      
+      if (!recordingState.isRecording) {
+        await handleStartRecording(el);
       } else {
-        stopRecording();
-        delete el.dataset.recording;
-        el.style.background = '#FFD700';
+        await handleStopRecording(el);
       }
     });
   }
 
-  // Recording state
-  let mediaRecorder = null;
-  let chunks = [];
-  let audioContext = null;
-  let analyser = null;
-  let sourceNode = null;
-  let rafId = null;
-  let currentStream = null;
-  let recognizer = null;
-  let fallbackTranscript = '';
-  let fallbackError = null;
-  let isStopping = false;
+  // Recording state - centralized state management
+  let recordingState = {
+    isRecording: false,
+    isInitializing: false,
+    isStopping: false,
+    mediaRecorder: null,
+    chunks: [],
+    audioContext: null,
+    analyser: null,
+    sourceNode: null,
+    rafId: null,
+    currentStream: null,
+    recognizer: null,
+    fallbackTranscript: ''
+  };
 
-  async function startRecording() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') return { success: false, error: 'already recording' };
-    if (isStopping) return { success: false, error: 'still stopping previous recording' };
+  async function handleStartRecording(el) {
+    console.log('VOX.AI: Starting recording...');
+    recordingState.isInitializing = true;
+    
     try {
+      // Request microphone access - SINGLE CALL
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      currentStream = stream;
+      recordingState.currentStream = stream;
 
       // Create AudioContext and analyser for VU meter
       try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        sourceNode = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        sourceNode.connect(analyser);
+        recordingState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        recordingState.sourceNode = recordingState.audioContext.createMediaStreamSource(stream);
+        recordingState.analyser = recordingState.audioContext.createAnalyser();
+        recordingState.analyser.fftSize = 2048;
+        recordingState.sourceNode.connect(recordingState.analyser);
       } catch (err) {
         console.warn('VOX.AI: audio analyser not available', err);
-        audioContext = null;
-        analyser = null;
-        sourceNode = null;
+        recordingState.audioContext = null;
+        recordingState.analyser = null;
+        recordingState.sourceNode = null;
       }
 
-      mediaRecorder = new MediaRecorder(stream);
-      chunks = [];
-      mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        processWithFirebase(blob);
+      // Setup MediaRecorder
+      recordingState.mediaRecorder = new MediaRecorder(stream);
+      recordingState.chunks = [];
+      recordingState.mediaRecorder.ondataavailable = e => { 
+        if (e.data && e.data.size) recordingState.chunks.push(e.data); 
+      };
+      
+      recordingState.mediaRecorder.onstop = async () => {
+        const blob = new Blob(recordingState.chunks, { type: 'audio/webm' });
+        await processRecording(blob);
         cleanupAudioResources();
       };
-      mediaRecorder.start();
+      
+      recordingState.mediaRecorder.start();
 
-      // start SpeechRecognition fallback if available
+      // Start SpeechRecognition fallback if available
       try {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
-          recognizer = new SpeechRecognition();
-          recognizer.lang = 'en-US';
-          recognizer.interimResults = true;
-          fallbackTranscript = '';
-          recognizer.onresult = (ev) => {
+          recordingState.recognizer = new SpeechRecognition();
+          recordingState.recognizer.lang = 'en-US';
+          recordingState.recognizer.interimResults = true;
+          recordingState.fallbackTranscript = '';
+          recordingState.recognizer.onresult = (ev) => {
             let final = '';
             for (let i = 0; i < ev.results.length; i++) {
               if (ev.results[i].isFinal) final += ev.results[i][0].transcript + ' ';
             }
-            if (final.trim()) fallbackTranscript = final.trim();
+            if (final.trim()) recordingState.fallbackTranscript = final.trim();
           };
-          recognizer.onerror = (err) => { console.warn('VOX.AI SR error', err); fallbackError = String(err && err.error ? err.error : err); };
-          try { recognizer.start(); } catch (e) { console.error("VOX.AI: Failed to start SpeechRecognition", e); }
+          recordingState.recognizer.onerror = (err) => { console.warn('VOX.AI SR error', err); };
+          try { recordingState.recognizer.start(); } catch (e) { console.error("VOX.AI: Failed to start SpeechRecognition", e); }
         }
       } catch (e) { /* ignore */ }
 
-      // start the analyser draw loop if available
-      if (analyser) startAnalyseLoop();
-      return { success: true };
+      // Start the analyser draw loop if available
+      if (recordingState.analyser) startAnalyseLoop();
+      
+      // Update UI state
+      recordingState.isRecording = true;
+      recordingState.isInitializing = false;
+      el.dataset.recording = '1';
+      el.style.background = '#ff6b6b';
+      console.log('VOX.AI: Recording started.');
+      
     } catch (err) {
-      return { success: false, error: String(err) };
+      console.error('VOX.AI: Failed to start recording:', err);
+      recordingState.isInitializing = false;
+      cleanupAudioResources();
     }
   }
 
+  async function handleStopRecording(el) {
+    console.log('VOX.AI: Stopping recording...');
+    recordingState.isStopping = true;
+    
+    try {
+      // Stop analyser UI loop immediately
+      if (recordingState.rafId) { 
+        cancelAnimationFrame(recordingState.rafId); 
+        recordingState.rafId = null; 
+      }
+      
+      const levelEl = el && el._levelEl;
+      if (levelEl) {
+        levelEl.style.transform = 'scale(1)';
+        levelEl.style.background = '#111';
+      }
+
+      // Stop both services simultaneously
+      if (recordingState.recognizer) {
+        recordingState.recognizer.stop();
+      }
+      if (recordingState.mediaRecorder && recordingState.mediaRecorder.state !== 'inactive') {
+        recordingState.mediaRecorder.stop();
+      } else {
+        // If the recorder is already stopped, trigger cleanup manually
+        cleanupAudioResources();
+      }
+      
+      // Update UI state
+      recordingState.isRecording = false;
+      recordingState.isStopping = false;
+      delete el.dataset.recording;
+      el.style.background = '#FFD700';
+      console.log('VOX.AI: Recording stopped.');
+      
+    } catch (err) {
+      console.error('VOX.AI: Error stopping recording:', err);
+      recordingState.isStopping = false;
+      cleanupAudioResources();
+    }
+  }
+
+  async function processRecording(blob) {
+    const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
+    const onDeviceCheck = async (e) => {
+      if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
+      window.removeEventListener('message', onDeviceCheck);
+
+      let transcription = null;
+      if (e.data.payload.isAvailable) {
+        // On-device transcription would go here if it worked.
+        // For now, we'll just use the fallback transcript.
+        transcription = recordingState.fallbackTranscript;
+      } else {
+        transcription = await getTranscription(blob);
+      }
+
+      if (transcription) {
+        console.log('VOX.AI: Transcription result:', transcription);
+        const schema = analyzeForm();
+        window.postMessage({
+          voxai: 'PROCESS_TEXT_INPAGE',
+          text: transcription,
+          schema: schema,
+          channel
+        }, '*');
+      }
+    };
+    window.addEventListener('message', onDeviceCheck);
+    window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
+  }
+
   function startAnalyseLoop() {
-    if (!analyser) return;
-    const data = new Uint8Array(analyser.fftSize);
+    if (!recordingState.analyser) return;
+    const data = new Uint8Array(recordingState.analyser.fftSize);
     const el = document.getElementById(FLOAT_ID);
     const levelEl = el && el._levelEl;
 
     function draw() {
-      analyser.getByteTimeDomainData(data);
+      recordingState.analyser.getByteTimeDomainData(data);
       // compute RMS
       let sum = 0;
       for (let i = 0; i < data.length; i++) {
@@ -181,71 +268,45 @@ if (window.__voxai_installed) {
         levelEl.style.background = `hsl(${hue} 80% ${normalized > 0.4 ? 40 : 18}%)`;
       }
 
-      rafId = requestAnimationFrame(draw);
+      recordingState.rafId = requestAnimationFrame(draw);
     }
 
-    rafId = requestAnimationFrame(draw);
+    recordingState.rafId = requestAnimationFrame(draw);
   }
 
   function cleanupAudioResources() {
     // Stop and nullify the recognizer
-    if (recognizer) {
-      recognizer = null;
+    if (recordingState.recognizer) {
+      recordingState.recognizer = null;
     }
 
     // Stop media tracks
-    if (currentStream) {
-      currentStream.getTracks().forEach(t => t.stop());
-      currentStream = null;
+    if (recordingState.currentStream) {
+      recordingState.currentStream.getTracks().forEach(t => t.stop());
+      recordingState.currentStream = null;
     }
 
     // Disconnect and close the audio context
-    if (analyser) analyser.disconnect();
-    if (sourceNode) sourceNode.disconnect();
-    if (audioContext) {
-      audioContext.close().catch(() => {});
-      audioContext = null;
+    if (recordingState.analyser) recordingState.analyser.disconnect();
+    if (recordingState.sourceNode) recordingState.sourceNode.disconnect();
+    if (recordingState.audioContext) {
+      recordingState.audioContext.close().catch(() => {});
+      recordingState.audioContext = null;
     }
 
     // Nullify the recorder
-    mediaRecorder = null;
+    recordingState.mediaRecorder = null;
 
-    // All cleanup is done, release the lock
-    isStopping = false;
+    // Reset all state
+    recordingState.isRecording = false;
+    recordingState.isInitializing = false;
+    recordingState.isStopping = false;
+    recordingState.chunks = [];
+    recordingState.fallbackTranscript = '';
+    
     console.log('VOX.AI: Cleanup complete. Ready to record again.');
   }
 
-  function stopRecording() {
-    console.log('VOX.AI: Recording stopped.');
-    if (!mediaRecorder) return { success: false, error: 'not recording' };
-    if (isStopping) return { success: false, error: 'already stopping' };
-    try {
-      isStopping = true;
-      // stop analyser UI loop immediately
-      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-      const el = document.getElementById(FLOAT_ID);
-      if (el && el._levelEl) {
-        el._levelEl.style.transform = 'scale(1)';
-        el._levelEl.style.background = '#111';
-      }
-
-      // Stop both services simultaneously to ensure the recognizer finalizes its result.
-      if (recognizer) {
-        recognizer.stop();
-      }
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      } else {
-        // If the recorder is already stopped, the onstop event won't fire,
-        // so we need to trigger cleanup manually.
-        cleanupAudioResources();
-      }
-      return { success: true };
-    } catch (err) {
-      isStopping = false; // Reset the lock on error
-      return { success: false, error: String(err) };
-    }
-  }
 
   function blobToBase64(blob) {
     return new Promise((resolve, reject) => {
@@ -256,38 +317,74 @@ if (window.__voxai_installed) {
     });
   }
 
-  async function processWithFirebase(blob) {
-    const app = firebase.initializeApp(firebaseConfig);
-    const vertexai = firebase.getVertexAI(app);
-    const model = vertexai.getGenerativeModel({ model: "gemini-pro" });
+  function analyzeForm() {
+    const form = document.querySelector('form');
+    if (!form) return null;
 
+    const fields = [];
+    const inputs = form.querySelectorAll('input, textarea, select');
+    inputs.forEach(input => {
+      if (input.type === 'hidden' || input.type === 'submit') return;
+
+      const label = document.querySelector(`label[for="${input.id}"]`) || input.closest('label');
+      fields.push({
+        name: input.name || input.id,
+        type: input.tagName.toLowerCase(),
+        inputType: input.type,
+        label: label ? label.textContent.trim() : ''
+      });
+    });
+
+    return { fields };
+  }
+
+  function fillForm(data) {
+    if (!data || !data.structured) return;
+
+    for (const [name, value] of Object.entries(data.structured)) {
+      const input = document.querySelector(`[name="${name}"]`);
+      if (input) {
+        input.value = value;
+      }
+    }
+  }
+
+  async function getTranscription(blob) {
     const audioBase64 = await blobToBase64(blob);
-
-    const req = {
-      contents: [{
-        role: "user",
-        parts: [{ inlineData: { mimeType: "audio/webm", data: audioBase64 } }]
-      }]
-    };
+    const app = window.FirebaseApp.initializeApp(window.firebaseConfig);
+    const functions = window.FirebaseFunctions.getFunctions(app);
+    const transcribeAudio = window.FirebaseFunctions.httpsCallable(functions, 'transcribeAudio');
 
     try {
-      const result = await model.generateContent(req);
-      // TODO: Process the response from the Firebase Gemini API
-      console.log('VOX.AI: Firebase Gemini response:', result);
+      const result = await transcribeAudio({ audioBase64 });
+      return result.data.transcription;
     } catch (error) {
-      console.error('VOX.AI: Firebase Gemini API request failed:', error);
-      // Fallback to basic transcription if the cloud call fails
-      if (fallbackTranscript) {
-        // Use the basic fallback
-      }
+      console.error('VOX.AI: Firebase AI Logic call failed:', error);
+      return null;
     }
   }
 
   // Message API from popup
   chrome.runtime.onMessage.addListener((msg, sender, send) => {
     if (!msg || !msg.type) return;
-    if (msg.type === 'START_RECORDING') { startRecording().then(send); return true; }
-    if (msg.type === 'STOP_RECORDING') { send(stopRecording()); return; }
+    if (msg.type === 'START_RECORDING') { 
+      const el = document.getElementById(FLOAT_ID);
+      if (el) {
+        handleStartRecording(el).then(() => send({ success: true }));
+      } else {
+        send({ success: false, error: 'UI not ready' });
+      }
+      return true; 
+    }
+    if (msg.type === 'STOP_RECORDING') { 
+      const el = document.getElementById(FLOAT_ID);
+      if (el) {
+        handleStopRecording(el).then(() => send({ success: true }));
+      } else {
+        send({ success: false, error: 'UI not ready' });
+      }
+      return true; 
+    }
   });
 
 
