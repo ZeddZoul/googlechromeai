@@ -71,6 +71,7 @@
 
         const result = await session.prompt(prompt);
         const json = JSON.parse(result);
+        console.log('VOX.AI: Inferred form data:', json);
         respond(channel, { success: true, result: json });
       } catch (err) {
         console.error('VOX.AI inpage error', err);

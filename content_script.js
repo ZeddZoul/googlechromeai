@@ -134,6 +134,7 @@ if (window.__voxai_installed) {
           }
 
           if (transcription) {
+            console.log('VOX.AI: Transcription result:', transcription);
             const schema = analyzeForm();
             window.postMessage({
               voxai: 'PROCESS_TEXT_INPAGE',
