@@ -11,28 +11,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab found. Open a page first.'); return; }
     try {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content_script.js'] });
+      // Content script is automatically injected via manifest.json
+      // Just refresh the page to ensure it's active
+      await chrome.tabs.reload(tab.id);
       logMsg('VOX.AI active on page.');
     } catch (err) {
       logMsg('Activate failed: ' + String(err));
     }
   });
-  // helper: send a message to the tab and auto-inject the content script if there's no receiver
+  // helper: send a message to the tab (content script auto-injected via manifest)
   async function sendToTabWithInject(tabId, message) {
     return new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, message, async (resp) => {
+      chrome.tabs.sendMessage(tabId, message, (resp) => {
         if (chrome.runtime.lastError) {
-          // likely: "Could not establish connection. Receiving end does not exist."
-          try {
-            await chrome.scripting.executeScript({ target: { tabId }, files: ['content_script.js'] });
-            // retry once
-            chrome.tabs.sendMessage(tabId, message, (resp2) => {
-              if (chrome.runtime.lastError) return resolve({ success: false, error: chrome.runtime.lastError.message });
-              return resolve(resp2);
-            });
-          } catch (e) {
-            return resolve({ success: false, error: String(e) });
-          }
+          return resolve({ success: false, error: chrome.runtime.lastError.message });
         } else {
           return resolve(resp);
         }

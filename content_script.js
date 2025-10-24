@@ -33,21 +33,48 @@ if (window.__voxai_installed) {
     const el = document.createElement('div');
     el.id = FLOAT_ID;
     el.style.position = 'fixed';
-  // docked pill style at bottom-right with VOX.AI yellow/white theme
-  el.style.right = '18px';
-  el.style.bottom = '18px';
-  el.style.width = '72px';
-  el.style.height = '72px';
-  el.style.borderRadius = '36px';
-  el.style.background = '#FFD700'; // VOX.AI yellow
-  el.style.boxShadow = '0 8px 30px rgba(0,0,0,0.15)';
+    el.style.right = '18px';
+    el.style.bottom = '18px';
+    el.style.width = '72px';
+    el.style.height = '72px';
+    el.style.borderRadius = '36px';
+    el.style.background = '#FFD700'; // VOX.AI yellow
+    el.style.boxShadow = '0 8px 30px rgba(0,0,0,0.15)';
     el.style.display = 'flex';
     el.style.alignItems = 'center';
     el.style.justifyContent = 'center';
     el.style.cursor = 'pointer';
     el.style.zIndex = 2147483647;
+    el.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    el.style.transform = 'scale(1)';
     el.title = 'VOX.AI — click to start/stop recording';
-    // inner level indicator + icon
+    
+    // Add hover effects
+    el.addEventListener('mouseenter', () => {
+      if (!recordingState.isRecording && !recordingState.isInitializing && !recordingState.isStopping) {
+        el.style.transform = 'scale(1.05)';
+        el.style.boxShadow = '0 12px 40px rgba(0,0,0,0.2)';
+      }
+    });
+    
+    el.addEventListener('mouseleave', () => {
+      if (!recordingState.isRecording) {
+        el.style.transform = 'scale(1)';
+        el.style.boxShadow = '0 8px 30px rgba(0,0,0,0.15)';
+      }
+    });
+    
+    // Add click animation
+    el.addEventListener('mousedown', () => {
+      el.style.transform = 'scale(0.95)';
+    });
+    
+    el.addEventListener('mouseup', () => {
+      if (!recordingState.isRecording) {
+        el.style.transform = 'scale(1.05)';
+      }
+    });
+    
     // Inner structure: waveform container + central mic button
     el.innerHTML = `
       <div id="voxai-wave" style="position:absolute;inset:8px;border-radius:28px;pointer-events:none;display:flex;align-items:center;justify-content:center;">
@@ -55,9 +82,35 @@ if (window.__voxai_installed) {
           ${Array.from({ length: 9 }).map(() => '<div class="vox-bar" style="width:3px;height:10px;background:rgba(255,255,255,0.28);border-radius:2px;transition:height 0.08s linear, background 120ms linear"></div>').join('')}
         </div>
       </div>
-      <div id="voxai-button" style="position:relative;width:52px;height:52px;border-radius:26px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,0.15);">
-        <svg id="voxai-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#FFD700"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 5 5 0 0 0 4 4.9V20a1 1 0 1 0 2 0v-4.1A5 5 0 0 0 19 11z" fill="#FFD700" opacity="0.6"/></svg>
+      <div id="voxai-button" style="position:relative;width:52px;height:52px;border-radius:26px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,0.15);transition:all 0.3s ease;">
+        <svg id="voxai-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition:all 0.3s ease;">
+          <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#FFD700"/>
+          <path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 5 5 0 0 0 4 4.9V20a1 1 0 1 0 2 0v-4.1A5 5 0 0 0 19 11z" fill="#FFD700" opacity="0.6"/>
+        </svg>
+      </div>
+      <div id="voxai-status" style="position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;background:#4CAF50;display:none;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+        <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.5s infinite;"></div>
       </div>`;
+    
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.2); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes recordingPulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+      }
+      .voxai-recording {
+        animation: recordingPulse 2s infinite;
+      }
+    `;
+    document.head.appendChild(style);
+    
     document.body.appendChild(el);
 
     // cache a reference to the inner level element for real-time updates
@@ -119,11 +172,16 @@ if (window.__voxai_installed) {
         recordingState.sourceNode = null;
       }
 
-      // Setup MediaRecorder
-      recordingState.mediaRecorder = new MediaRecorder(stream);
+      // Setup MediaRecorder with proper configuration
+      recordingState.mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
       recordingState.chunks = [];
       recordingState.mediaRecorder.ondataavailable = e => { 
-        if (e.data && e.data.size) recordingState.chunks.push(e.data); 
+        if (e.data && e.data.size) {
+          recordingState.chunks.push(e.data);
+          console.log('VOX.AI: Audio chunk received, size:', e.data.size);
+        }
       };
       
       recordingState.mediaRecorder.onstop = async () => {
@@ -132,7 +190,8 @@ if (window.__voxai_installed) {
         cleanupAudioResources();
       };
       
-      recordingState.mediaRecorder.start();
+      recordingState.mediaRecorder.start(100); // Collect data every 100ms
+      console.log('VOX.AI: MediaRecorder started with 100ms intervals');
 
       // Start SpeechRecognition fallback if available
       try {
@@ -162,6 +221,14 @@ if (window.__voxai_installed) {
       recordingState.isInitializing = false;
       el.dataset.recording = '1';
       el.style.background = '#ff6b6b';
+      el.classList.add('voxai-recording');
+      
+      // Show recording status indicator
+      const statusEl = el.querySelector('#voxai-status');
+      if (statusEl) {
+        statusEl.style.display = 'flex';
+      }
+      
       console.log('VOX.AI: Recording started.');
       
     } catch (err) {
@@ -204,6 +271,14 @@ if (window.__voxai_installed) {
       recordingState.isStopping = false;
       delete el.dataset.recording;
       el.style.background = '#FFD700';
+      el.classList.remove('voxai-recording');
+      
+      // Hide recording status indicator
+      const statusEl = el.querySelector('#voxai-status');
+      if (statusEl) {
+        statusEl.style.display = 'none';
+      }
+      
       console.log('VOX.AI: Recording stopped.');
       
     } catch (err) {
@@ -214,31 +289,105 @@ if (window.__voxai_installed) {
   }
 
   async function processRecording(blob) {
+    console.log('VOX.AI: Processing recording...');
     const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
+    
     const onDeviceCheck = async (e) => {
       if (!e.data || e.data.channel !== channel || typeof e.data.payload === 'undefined') return;
       window.removeEventListener('message', onDeviceCheck);
 
+      console.log('VOX.AI: Device check response:', e.data.payload);
+
       let transcription = null;
+      
+      // Hybrid AI Strategy: Try on-device first, then Firebase, then Web Speech API
       if (e.data.payload.isAvailable) {
-        // On-device transcription would go here if it worked.
-        // For now, we'll just use the fallback transcript.
+        console.log('VOX.AI: On-device AI available, trying on-device transcription first...');
+        try {
+          const audioBase64 = await blobToBase64(blob);
+          const onDeviceChannel = `voxai_ondevice_${Math.random().toString(36).slice(2)}`;
+          
+          const onDeviceResponse = async (e) => {
+            if (!e.data || e.data.channel !== onDeviceChannel || typeof e.data.payload === 'undefined') return;
+            window.removeEventListener('message', onDeviceResponse);
+            
+            if (e.data.payload.success && e.data.payload.result.transcription) {
+              transcription = e.data.payload.result.transcription;
+              console.log('VOX.AI: On-device transcription successful:', transcription);
+            } else {
+              console.log('VOX.AI: On-device transcription failed, trying Firebase...');
+              transcription = null; // Will trigger Firebase fallback
+            }
+          };
+          
+          window.addEventListener('message', onDeviceResponse);
+          window.postMessage({
+            voxai: 'PROCESS_AUDIO_INPAGE',
+            audioBase64: audioBase64,
+            channel: onDeviceChannel
+          }, '*');
+          
+          // Wait for on-device response (with timeout)
+          await new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+              window.removeEventListener('message', onDeviceResponse);
+              console.log('VOX.AI: On-device transcription timeout, trying Firebase...');
+              transcription = null; // Will trigger Firebase fallback
+              resolve();
+            }, 5000); // 5 second timeout for on-device
+            
+            const originalHandler = onDeviceResponse;
+            const wrappedHandler = (e) => {
+              originalHandler(e);
+              clearTimeout(timeout);
+              resolve();
+            };
+            window.removeEventListener('message', onDeviceResponse);
+            window.addEventListener('message', wrappedHandler);
+          });
+          
+        } catch (error) {
+          console.error('VOX.AI: On-device transcription error:', error);
+          transcription = null; // Will trigger Firebase fallback
+        }
+      }
+      
+      // Fallback 1: Firebase transcription if on-device failed or unavailable
+      if (!transcription) {
+        console.log('VOX.AI: Trying Firebase transcription...');
+        try {
+          transcription = await getTranscription(blob);
+          if (transcription) {
+            console.log('VOX.AI: Firebase transcription successful:', transcription);
+          } else {
+            console.log('VOX.AI: Firebase transcription failed, using Web Speech API fallback');
+          }
+        } catch (error) {
+          console.error('VOX.AI: Firebase transcription error:', error);
+        }
+      }
+      
+      // Fallback 2: Web Speech API if both on-device and Firebase failed
+      if (!transcription) {
+        console.log('VOX.AI: Using Web Speech API fallback transcript:', recordingState.fallbackTranscript);
         transcription = recordingState.fallbackTranscript;
-      } else {
-        transcription = await getTranscription(blob);
       }
 
       if (transcription) {
-        console.log('VOX.AI: Transcription result:', transcription);
+        console.log('VOX.AI: Final transcription result:', transcription);
         const schema = analyzeForm();
+        console.log('VOX.AI: Form schema:', schema);
         window.postMessage({
           voxai: 'PROCESS_TEXT_INPAGE',
           text: transcription,
           schema: schema,
           channel
         }, '*');
+      } else {
+        console.log('VOX.AI: No transcription available');
       }
     };
+    
     window.addEventListener('message', onDeviceCheck);
     window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
   }
@@ -304,6 +453,25 @@ if (window.__voxai_installed) {
     recordingState.chunks = [];
     recordingState.fallbackTranscript = '';
     
+    // Reset UI state
+    const el = document.getElementById(FLOAT_ID);
+    if (el) {
+      el.style.background = '#FFD700';
+      el.classList.remove('voxai-recording');
+      delete el.dataset.recording;
+      
+      const statusEl = el.querySelector('#voxai-status');
+      if (statusEl) {
+        statusEl.style.display = 'none';
+      }
+      
+      const levelEl = el._levelEl;
+      if (levelEl) {
+        levelEl.style.transform = 'scale(1)';
+        levelEl.style.background = '#111';
+      }
+    }
+    
     console.log('VOX.AI: Cleanup complete. Ready to record again.');
   }
 
@@ -350,16 +518,36 @@ if (window.__voxai_installed) {
   }
 
   async function getTranscription(blob) {
-    const audioBase64 = await blobToBase64(blob);
-    const app = window.FirebaseApp.initializeApp(window.firebaseConfig);
-    const functions = window.FirebaseFunctions.getFunctions(app);
-    const transcribeAudio = window.FirebaseFunctions.httpsCallable(functions, 'transcribeAudio');
-
+    console.log('VOX.AI: Starting Firebase transcription...');
     try {
+      const audioBase64 = await blobToBase64(blob);
+      console.log('VOX.AI: Audio converted to base64, length:', audioBase64.length);
+      
+      if (!window.FirebaseApp) {
+        throw new Error('FirebaseApp not available');
+      }
+      if (!window.FirebaseFunctions) {
+        throw new Error('FirebaseFunctions not available');
+      }
+      if (!window.firebaseConfig) {
+        throw new Error('Firebase config not available');
+      }
+      
+      const app = window.FirebaseApp.initializeApp(window.firebaseConfig);
+      console.log('VOX.AI: Firebase app initialized');
+      
+      const functions = window.FirebaseFunctions.getFunctions(app);
+      console.log('VOX.AI: Firebase functions initialized');
+      
+      const transcribeAudio = window.FirebaseFunctions.httpsCallable(functions, 'transcribeAudio');
+      console.log('VOX.AI: Calling transcribeAudio function...');
+      
       const result = await transcribeAudio({ audioBase64 });
+      console.log('VOX.AI: Firebase transcription result:', result);
+      
       return result.data.transcription;
     } catch (error) {
-      console.error('VOX.AI: Firebase AI Logic call failed:', error);
+      console.error('VOX.AI: Firebase transcription failed:', error);
       return null;
     }
   }
