@@ -1,33 +1,127 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Vox AI</title>
     <link rel="stylesheet" href="util.css" />
-  </head>
-  <body class="p-4 font-sans">
-    <div class="max-w-sm" style="width:340px;background:white;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,0.08)">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <div style="width:44px;height:44px;border-radius:10px;background:#FFD700;display:flex;align-items:center;justify-content:center;color:#111;font-weight:700;font-size:14px">V</div>
-        <div>
-          <div style="font-size:18px;font-weight:700;color:#111">VOX.AI</div>
-          <div style="font-size:12px;color:#666">Voice-first form-filling — local</div>
+    <style>
+        body {
+            width: 340px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: #FFD700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #111;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111;
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #666;
+        }
+        .record-area {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        #record-button {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px auto;
+        }
+        #record-button.ready {
+            background: #FFD700;
+            box-shadow: 0 6px 18px rgba(255, 215, 0, 0.5);
+        }
+        #record-button.recording {
+            background: #ff6b6b;
+            box-shadow: 0 6px 18px rgba(255, 107, 107, 0.5);
+            animation: recordingPulse 2s infinite;
+        }
+        #record-button.processing {
+            background: #777;
+            cursor: not-allowed;
+            box-shadow: 0 6px 18px rgba(119, 119, 119, 0.5);
+        }
+        #status {
+            font-size: 14px;
+            color: #333;
+            font-weight: 600;
+        }
+        .footer {
+            text-align: center;
+        }
+        #reload-button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            background: #f5f5f5;
+            color: #555;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        @keyframes recordingPulse {
+          0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+        }
+    </style>
+</head>
+<body class="p-4 font-sans">
+    <div class="container">
+        <div class="header">
+            <div class="logo">V</div>
+            <div>
+                <div class="title">VOX.AI</div>
+                <div class="subtitle">Voice-first form-filling</div>
+            </div>
         </div>
-      </div>
 
-      <div style="height:78px;display:flex;align-items:center;justify-content:center;flex-direction:column;border-radius:8px;background:linear-gradient(180deg,#faf8f2,#fff7d9);margin-bottom:12px">
-        <div style="font-size:12px;color:#555;margin-bottom:6px">Live recording</div>
-        <button id="start" style="width:84px;height:84px;border-radius:42px;border:none;background:#FFD700;color:#111;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.12)">▶</button>
-      </div>
+        <div class="record-area">
+            <button id="record-button" class="ready" title="Click to Record">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#111"/>
+                    <path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 5 5 0 0 0 4 4.9V20a1 1 0 1 0 2 0v-4.1A5 5 0 0 0 19 11z" fill="#111" opacity="0.6"/>
+                </svg>
+            </button>
+            <div id="status">Ready to record</div>
+        </div>
 
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button id="inject" style="flex:1;padding:10px;border-radius:8px;border:1px solid #eee;background:white;color:#111;font-weight:600;cursor:pointer">Activate</button>
-        <button id="stop" style="flex:1;padding:10px;border-radius:8px;border:1px solid #eee;background:white;color:#111;font-weight:600;cursor:pointer">Stop</button>
-      </div>
-
-      <div id="log" style="min-height:40px;border-radius:8px;padding:8px;background:#fff;color:#111;font-size:12px;border:1px solid #f0f0f0"></div>
+        <div class="footer">
+            <button id="reload-button">Reload on Page</button>
+        </div>
     </div>
     <script src="popup.js"></script>
-  </body>
+</body>
 </html>

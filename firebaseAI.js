@@ -7,28 +7,20 @@
  */
 
 async function transcribeAudio(audioBlob, webSpeechTranscript) {
-  console.log('VOX.AI [Transcription Orchestrator]: Starting 3-layer transcription pipeline...');
-
   // LAYER 1: Try Nano (if model detection shows it's available)
   // Note: Nano doesn't support audio directly, but we check availability first
   const nanoAvailable = await checkNanoAvailability();
   if (nanoAvailable) {
-    console.log('VOX.AI [Transcription Orchestrator]: Nano detected, but Nano does not support audio - skipping to Layer 2');
   }
 
   // LAYER 2: Firebase Gemini
-  console.log('VOX.AI [Transcription Orchestrator]: Layer 2 - Attempting Firebase Gemini transcription');
   const firebaseResult = await transcribeWithFirebase(audioBlob);
   if (firebaseResult && firebaseResult.trim()) {
-    console.log('VOX.AI [Transcription Orchestrator]: ✓ SUCCESS via Firebase (Layer 2)');
     return firebaseResult;
   }
-  console.log('VOX.AI [Transcription Orchestrator]: Layer 2 failed, moving to Layer 3...');
 
   // LAYER 3: Web Speech API fallback
-  console.log('VOX.AI [Transcription Orchestrator]: Layer 3 - Using Web Speech API fallback');
   if (webSpeechTranscript && webSpeechTranscript.trim()) {
-    console.log('VOX.AI [Transcription Orchestrator]: ✓ SUCCESS via Web Speech API (Layer 3)');
     return webSpeechTranscript;
   }
 
@@ -38,35 +30,23 @@ async function transcribeAudio(audioBlob, webSpeechTranscript) {
 }
 
 async function extractFormData(text, schema, nanoSession) {
-  console.log('VOX.AI [Extraction Orchestrator]: Starting 3-layer form extraction pipeline...');
-
   // LAYER 1: Try Nano on-device AI
   if (nanoSession) {
-    console.log('VOX.AI [Extraction Orchestrator]: Layer 1 - Attempting Nano (on-device) form extraction');
     const nanoResult = await extractWithNano(text, schema, nanoSession);
     if (nanoResult && Object.keys(nanoResult).length > 0) {
-      console.log('VOX.AI [Extraction Orchestrator]: ✓ SUCCESS via Nano (Layer 1) -', Object.keys(nanoResult).length, 'fields');
       return nanoResult;
     }
-    console.log('VOX.AI [Extraction Orchestrator]: Layer 1 failed, moving to Layer 2...');
-  } else {
-    console.log('VOX.AI [Extraction Orchestrator]: Layer 1 skipped (Nano not available)');
   }
 
   // LAYER 2: Firebase Gemini
-  console.log('VOX.AI [Extraction Orchestrator]: Layer 2 - Attempting Firebase Gemini form extraction');
   const firebaseResult = await extractFormDataWithFirebase(text, schema);
   if (firebaseResult && Object.keys(firebaseResult).length > 0) {
-    console.log('VOX.AI [Extraction Orchestrator]: ✓ SUCCESS via Firebase (Layer 2) -', Object.keys(firebaseResult).length, 'fields');
     return firebaseResult;
   }
-  console.log('VOX.AI [Extraction Orchestrator]: Layer 2 failed, moving to Layer 3...');
 
   // LAYER 3: Pattern-matching fallback (existing logic)
-  console.log('VOX.AI [Extraction Orchestrator]: Layer 3 - Using pattern-matching fallback');
   const patternResult = await extractWithPatternMatching(text, schema);
   if (patternResult && Object.keys(patternResult).length > 0) {
-    console.log('VOX.AI [Extraction Orchestrator]: ✓ SUCCESS via Pattern-Matching (Layer 3) -', Object.keys(patternResult).length, 'fields');
     return patternResult;
   }
 

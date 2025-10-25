@@ -1,49 +1,84 @@
-// Popup controls for VOX.AI
 document.addEventListener('DOMContentLoaded', () => {
-  const injectBtn = document.getElementById('inject');
-  const startBtn = document.getElementById('start');
-  const stopBtn = document.getElementById('stop');
-  const log = document.getElementById('log');
+    const recordButton = document.getElementById('record-button');
+    const statusDiv = document.getElementById('status');
+    const reloadButton = document.getElementById('reload-button');
 
-  function logMsg(s) { log.textContent = s; }
+    let recording = false;
+    let processing = false;
 
-  injectBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab found. Open a page first.'); return; }
-    try {
-      // Content script is automatically injected via manifest.json
-      // Just refresh the page to ensure it's active
-      await chrome.tabs.reload(tab.id);
-      logMsg('VOX.AI active on page.');
-    } catch (err) {
-      logMsg('Activate failed: ' + String(err));
-    }
-  });
-  // helper: send a message to the tab (content script auto-injected via manifest)
-  async function sendToTabWithInject(tabId, message) {
-    return new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, message, (resp) => {
-        if (chrome.runtime.lastError) {
-          return resolve({ success: false, error: chrome.runtime.lastError.message });
+    // Function to update button UI based on state
+    function updateButtonUI() {
+        if (processing) {
+            recordButton.className = 'processing';
+            statusDiv.textContent = 'Processing...';
+            recordButton.disabled = true;
+        } else if (recording) {
+            recordButton.className = 'recording';
+            statusDiv.textContent = 'Recording...';
+            recordButton.disabled = false;
         } else {
-          return resolve(resp);
+            recordButton.className = 'ready';
+            statusDiv.textContent = 'Ready to record';
+            recordButton.disabled = false;
         }
-      });
+    }
+
+    // Function to send messages to content script
+    async function sendMessageToContentScript(message) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && typeof tab.id !== 'undefined') {
+            return new Promise((resolve) => {
+                chrome.tabs.sendMessage(tab.id, message, (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+        }
+    }
+
+    // Event listener for the record button
+    recordButton.addEventListener('click', async () => {
+        if (processing) return;
+
+        if (recording) {
+            // Stop recording
+            const response = await sendMessageToContentScript({ type: 'STOP_RECORDING' });
+            if (response && response.success) {
+                recording = false;
+                processing = true;
+                updateButtonUI();
+                // Note: The UI will be reset to "Ready" when processing is complete,
+                // which we can't directly track here. We'll assume it takes a few seconds.
+                setTimeout(() => {
+                    processing = false;
+                    updateButtonUI();
+                }, 4000);
+            }
+        } else {
+            // Start recording
+            const response = await sendMessageToContentScript({ type: 'START_RECORDING' });
+            if (response && response.success) {
+                recording = true;
+                updateButtonUI();
+            }
+        }
     });
-  }
 
-  startBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab. Open a page first.'); return; }
-    const r = await sendToTabWithInject(tab.id, { type: 'START_RECORDING' });
-    if (r && r.success === false && r.error) logMsg('Start failed: ' + r.error); else logMsg('Recording...');
-  });
+    // Event listener for the reload button
+    reloadButton.addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && typeof tab.id !== 'undefined') {
+            try {
+                await chrome.tabs.reload(tab.id);
+            } catch (err) {
+                console.error('Failed to reload tab:', err);
+            }
+        }
+    });
 
-  stopBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab. Open a page first.'); return; }
-    const r = await sendToTabWithInject(tab.id, { type: 'STOP_RECORDING' });
-    if (r && r.success === false && r.error) logMsg('Stop failed: ' + r.error); else logMsg('Stopped');
-  });
-  // no file upload: VOX.AI records live audio only
+    // Initial UI state
+    updateButtonUI();
 });
