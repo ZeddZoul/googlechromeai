@@ -15,8 +15,8 @@
   }
 
   const modelCapabilities = {
-    expectedInputs: [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }]
+    expectedInputs: [{ type: 'text', languages: ['en', 'es', 'ja'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en', 'es', 'ja'] }]
   };
 
   async function ensureSession() {
@@ -27,6 +27,7 @@
       monitor(m) {
         try { m.addEventListener && m.addEventListener('downloadprogress', (ev) => console.log('LanguageModel download progress', ev.loaded)); } catch (e) { }
       },
+      systemPrompt: 'You are a helpful assistant. Always respond in English.',
       ...modelCapabilities
     };
     window.__voxai_languageModelSession = await LanguageModel.create(sessionOptions);
@@ -42,11 +43,23 @@
 
       console.log('VOX.AI: Checking on-device availability...');
       let isAvailable = false;
+      let session = null;
       try {
         if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
           const availability = await LanguageModel.availability(modelCapabilities);
           isAvailable = availability !== 'unavailable';
           console.log('VOX.AI: LanguageModel availability:', availability);
+          
+          // If available, create session for form extraction (Layer 1)
+          if (isAvailable) {
+            try {
+              session = await ensureSession();
+              console.log('VOX.AI: Nano session ready for form extraction');
+            } catch (e) {
+              console.warn('VOX.AI: Could not create Nano session', e);
+              session = null;
+            }
+          }
         } else {
           console.log('VOX.AI: LanguageModel not available');
         }
@@ -56,7 +69,7 @@
       }
 
       console.log('VOX.AI: On-device available:', isAvailable);
-      respond(channel, { isAvailable });
+      respond(channel, { isAvailable, session: isAvailable ? 'available' : null });
       return;
     }
 
@@ -100,19 +113,18 @@
       const { text, schema, channel } = ev.data;
       if (!channel) return;
 
-      console.log('VOX.AI: Processing text in page:', text);
+      console.log('VOX.AI: Processing text with Nano (Layer 1):', text.substring(0, 50) + '...');
       console.log('VOX.AI: Form schema:', schema);
 
       try {
-        // This extension REQUIRES Gemini Nano - no fallback
-        console.log('VOX.AI: Using on-device Gemini Nano for form extraction');
         const session = await ensureSession();
-        console.log('VOX.AI: Session created, generating prompt...');
+        console.log('VOX.AI: Nano session ready for form extraction');
 
         const prompt = `
           You are a helpful assistant that fills out web forms.
           Based on the following transcription, fill out the form fields described in the JSON schema.
           Your response should be a JSON object with a single key: "structured", where the value is an object of the filled form fields.
+          Respond in English.
 
           Transcription: "${text}"
 
@@ -120,9 +132,9 @@
           ${JSON.stringify(schema)}
         `;
 
-        console.log('VOX.AI: Calling session.prompt...');
+        console.log('VOX.AI: Calling Nano model for extraction with language=en...');
         const result = await session.prompt(prompt);
-        console.log('VOX.AI: Session prompt result:', result);
+        console.log('VOX.AI: Nano extraction result:', result);
 
         // Extract JSON from markdown format if present
         let jsonString = result;
@@ -135,10 +147,11 @@
 
         console.log('VOX.AI: Extracted JSON string:', jsonString);
         const json = JSON.parse(jsonString);
-        console.log('VOX.AI: Final parsed data:', json);
+        console.log('VOX.AI: Nano extraction successful:', json);
         respond(channel, { success: true, result: json });
       } catch (err) {
-        console.error('VOX.AI inpage error', err);
+        console.warn('VOX.AI: Nano extraction failed (Layer 1 will fallback to Firebase):', err);
+        // Return failure - content_script will use Firebase fallback (Layer 2)
         respond(channel, { success: false, error: String(err) });
       }
     }
