@@ -1,4 +1,7 @@
 // VOX.AI - content_script.js
+const { initializeApp } = require('firebase/app');
+const { getAI } = require('firebase/ai');
+
 // Provides a small floating microphone UI that the user can click to start/stop
 // recording. Audio is forwarded to the injected in-page script (inpage.js)
 // which is responsible for calling the browser's built-in Prompt API.
@@ -14,8 +17,8 @@ function blobToBase64(blob) {
 
 async function getTranscription(blob) {
   try {
-    const app = firebase.app.initializeApp(firebaseConfig);
-    const ai = firebase.ai.getAI(app);
+    const app = initializeApp(window.firebaseConfig);
+    const ai = getAI(app);
     const model = ai.getGenerativeModel({ model: 'gemini-pro' });
     const audioBase64 = await blobToBase64(blob);
     const result = await model.generateContent({
@@ -536,9 +539,10 @@ if (window.__voxai_installed) {
   }
 
   // Message API from popup
-  chrome.runtime.onMessage.addListener((msg, sender, send) => {
-    if (!msg || !msg.type) return;
-    if (msg.type === 'START_RECORDING') { 
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((msg, sender, send) => {
+      if (!msg || !msg.type) return;
+      if (msg.type === 'START_RECORDING') {
       const el = document.getElementById(FLOAT_ID);
       if (el) {
         handleStartRecording(el).then(() => send({ success: true }));
@@ -557,6 +561,7 @@ if (window.__voxai_installed) {
       return true; 
     }
   });
+}
 
 
   // Attach UI immediately
