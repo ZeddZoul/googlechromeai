@@ -3,6 +3,17 @@
 // recording. Audio is forwarded to the injected in-page script (inpage.js)
 // which is responsible for calling the browser's built-in Prompt API.
 
+// --- Inject Firebase SDK into page context ---
+(function() {
+  if (!window.__voxai_firebase_injected) {
+    window.__voxai_firebase_injected = true;
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('firebase-injector.js');
+    document.head.appendChild(script);
+    console.log('VOX.AI [Content Script]: Injected Firebase SDK loader');
+  }
+})();
+
 // --- Firebase transcription function (disabled - requires backend setup) ---
 // Uncomment and configure if you have Firebase Functions deployed
 /*
@@ -359,8 +370,7 @@ if (window.__voxai_installed) {
   }
 
   async function processRecording(blob, savedTranscript) {
-    console.log('VOX.AI: Processing recording...');
-    console.log('VOX.AI: Received transcript:', savedTranscript);
+    console.log('VOX.AI: Processing recording with hybrid pipeline...');
     const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
 
     const onDeviceCheck = async (e) => {
@@ -370,66 +380,77 @@ if (window.__voxai_installed) {
       console.log('VOX.AI: Device check response:', e.data.payload);
 
       let transcription = null;
+      let nanoSession = e.data.payload.session || null;
 
-      // Check if on-device AI (Gemini Nano) is available
-      if (!e.data.payload.isAvailable) {
-        console.error('VOX.AI: Gemini Nano is NOT available on this device!');
-        console.error('VOX.AI: This extension requires Gemini Nano to extract form data.');
-        console.error('VOX.AI: Please use a device with Gemini Nano support.');
-        alert('VOX.AI requires Gemini Nano (on-device AI) to work.\n\nThis device is not eligible for running the on-device model.\n\nPlease use a supported device with Gemini Nano enabled.');
+      // Use hybrid transcription pipeline: Firebase -> Web Speech API
+      console.log('VOX.AI: Starting hybrid transcription (Firebase with Web Speech fallback)');
+      transcription = await transcribeAudio(blob, savedTranscript);
+
+      if (!transcription) {
+        showNotification('No speech detected. Please try again.');
+        console.warn('VOX.AI: All transcription methods failed');
         return;
       }
 
-      console.log('VOX.AI: Gemini Nano is available! ✅');
-
-      // Use the saved Web Speech API transcript
-      transcription = savedTranscript;
+      console.log('VOX.AI: Transcription successful:', transcription);
 
       if (transcription && transcription.trim() !== '') {
-        console.log('VOX.AI: Final transcription result:', transcription);
-        const schema = analyzeForm();
-        console.log('VOX.AI: Form schema:', schema);
+        console.log('VOX.AI: Transcription successful:', transcription);
+      const schema = analyzeForm();
+      console.log('VOX.AI: Form schema:', schema);
 
-        // Setup listener for inpage response
-        const onInpageResponse = (e) => {
-          console.log('VOX.AI: Received message in onInpageResponse:', e.data);
+      // Setup listener for inpage response (for Nano session if available)
+      const onInpageResponse = (e) => {
+        console.log('VOX.AI: Received message in onInpageResponse:', e.data);
 
-          // Ignore messages that are requests (have 'voxai' property)
-          if (e.data && e.data.voxai) {
-            console.log('VOX.AI: Ignoring request message with voxai:', e.data.voxai);
-            return;
-          }
+        // Ignore messages that are requests (have 'voxai' property)
+        if (e.data && e.data.voxai) {
+          console.log('VOX.AI: Ignoring request message with voxai:', e.data.voxai);
+          return;
+        }
 
-          if (!e.data || e.data.channel !== channel) {
-            console.log('VOX.AI: Message channel mismatch or no data. Expected:', channel, 'Got:', e.data?.channel);
-            return;
-          }
+        if (!e.data || e.data.channel !== channel) {
+          return;
+        }
 
-          window.removeEventListener('message', onInpageResponse);
-          console.log('VOX.AI: Channel matched! Processing response...');
-          console.log('VOX.AI: e.data.payload:', e.data.payload);
-          console.log('VOX.AI: e.data.payload.success:', e.data.payload?.success);
-          console.log('VOX.AI: e.data.payload.result:', e.data.payload?.result);
+        window.removeEventListener('message', onInpageResponse);
+        console.log('VOX.AI: Channel matched! Processing response...');
 
-          if (e.data.payload && e.data.payload.success) {
-            console.log('VOX.AI: Form data extraction successful:', e.data.payload.result);
-            fillForm(e.data.payload.result);
-          } else {
-            console.error('VOX.AI: Form data extraction failed. Payload:', e.data.payload);
-          }
-        };
-        window.addEventListener('message', onInpageResponse);
-        console.log('VOX.AI: Listener added for channel:', channel);
+        // Get Nano extraction result if available
+        let nanoData = null;
+        if (e.data.payload && e.data.payload.success) {
+          nanoData = e.data.payload.result;
+        }
 
-        window.postMessage({
-          voxai: 'PROCESS_TEXT_INPAGE',
-          text: transcription,
-          schema: schema,
-          channel
-        }, '*');
-      } else {
-        console.log('VOX.AI: No transcription available');
-      }
+        // If Nano succeeded, use it. Otherwise, use hybrid fallback
+        if (nanoData && Object.keys(nanoData).length > 0) {
+          console.log('VOX.AI: Using Nano extraction:', nanoData);
+          fillForm(nanoData);
+        } else {
+          console.log('VOX.AI: Nano extraction failed, using Firebase fallback...');
+          // Use Firebase/Pattern matching fallback
+          extractFormData(transcription, schema, nanoSession).then(extractedData => {
+            if (extractedData && Object.keys(extractedData).length > 0) {
+              console.log('VOX.AI: Fallback extraction successful:', extractedData);
+              fillForm(extractedData);
+            } else {
+              showNotification('Could not extract form data. Please review manually.');
+            }
+          });
+        }
+      };
+
+      window.addEventListener('message', onInpageResponse);
+      console.log('VOX.AI: Listener added for channel:', channel);
+
+      // Send to Nano for Layer 1 extraction
+      window.postMessage({
+        voxai: 'PROCESS_TEXT_INPAGE',
+        text: transcription,
+        schema: schema,
+        channel
+      }, '*');
+      } // closing if for transcription check
     };
 
     window.addEventListener('message', onDeviceCheck);
