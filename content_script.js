@@ -178,23 +178,17 @@ function processRecording(blob, savedTranscript) {
         const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
 
         const onInpageResponse = (e) => {
-            if (e.data.channel !== channel) return;
+            if (e.data.channel !== channel || !e.data.payload) return; // Ignore outgoing messages
             window.removeEventListener('message', onInpageResponse);
 
-            console.log("VOX.AI [content_script]: Received response from inpage:", e.data);
-            console.log("VOX.AI [content_script]: Active form is:", recordingState.activeForm);
-
-            if (e.data.payload && e.data.payload.success) {
-                console.log("VOX.AI [content_script]: Payload indicates success. Calling fillForm.");
+            if (e.data.payload.success) {
                 fillForm(e.data.payload.result, recordingState.activeForm);
-            } else {
-                console.log("VOX.AI [content_script]: Payload indicates failure or is missing.");
             }
             resolve();
         };
 
         const onDeviceCheck = (e) => {
-            if (e.data.channel !== channel) return;
+            if (e.data.channel !== channel || !e.data.payload) return; // Ignore outgoing messages
             window.removeEventListener('message', onDeviceCheck);
 
             const transcription = savedTranscript;

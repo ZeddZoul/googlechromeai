@@ -186,7 +186,8 @@ describe('VOX.AI Content Script', () => {
 
         // Simulate the CHECK_ON_DEVICE message
         const channel = postMessageSpy.mock.calls[0][0].channel;
-        onDeviceCheckListener({ data: { channel } });
+        // The fix requires a payload to be present, so we simulate a successful check.
+        onDeviceCheckListener({ data: { channel, payload: { isAvailable: true } } });
 
         // Simulate the PROCESS_TEXT_INPAGE message and response
         const mockAiPayload = { success: true, result: { structured: { field1: 'hello world' } } };
