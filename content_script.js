@@ -180,8 +180,15 @@ function processRecording(blob, savedTranscript) {
         const onInpageResponse = (e) => {
             if (e.data.channel !== channel) return;
             window.removeEventListener('message', onInpageResponse);
+
+            console.log("VOX.AI [content_script]: Received response from inpage:", e.data);
+            console.log("VOX.AI [content_script]: Active form is:", recordingState.activeForm);
+
             if (e.data.payload && e.data.payload.success) {
+                console.log("VOX.AI [content_script]: Payload indicates success. Calling fillForm.");
                 fillForm(e.data.payload.result, recordingState.activeForm);
+            } else {
+                console.log("VOX.AI [content_script]: Payload indicates failure or is missing.");
             }
             resolve();
         };
