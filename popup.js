@@ -1,49 +1,62 @@
-// Popup controls for VOX.AI
+// popup.js - Settings management for VOX.AI
 document.addEventListener('DOMContentLoaded', () => {
-  const injectBtn = document.getElementById('inject');
-  const startBtn = document.getElementById('start');
-  const stopBtn = document.getElementById('stop');
-  const log = document.getElementById('log');
+    const micToggle = document.getElementById('floating-mic-toggle');
+    const micPosition = document.getElementById('mic-position');
+    const languageSelect = document.getElementById('transcription-language');
+    const resetButton = document.getElementById('reset-settings');
 
-  function logMsg(s) { log.textContent = s; }
+    const DEFAULTS = {
+        micEnabled: true,
+        micPosition: 'top-right',
+        language: 'en-US'
+    };
 
-  injectBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab found. Open a page first.'); return; }
-    try {
-      // Content script is automatically injected via manifest.json
-      // Just refresh the page to ensure it's active
-      await chrome.tabs.reload(tab.id);
-      logMsg('VOX.AI active on page.');
-    } catch (err) {
-      logMsg('Activate failed: ' + String(err));
+    // Load settings from storage and update the UI
+    function loadSettings() {
+        chrome.storage.sync.get(DEFAULTS, (settings) => {
+            micToggle.checked = settings.micEnabled;
+            micPosition.value = settings.micPosition;
+            languageSelect.value = settings.language;
+        });
     }
-  });
-  // helper: send a message to the tab (content script auto-injected via manifest)
-  async function sendToTabWithInject(tabId, message) {
-    return new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, message, (resp) => {
-        if (chrome.runtime.lastError) {
-          return resolve({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          return resolve(resp);
-        }
-      });
-    });
-  }
 
-  startBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab. Open a page first.'); return; }
-    const r = await sendToTabWithInject(tab.id, { type: 'START_RECORDING' });
-    if (r && r.success === false && r.error) logMsg('Start failed: ' + r.error); else logMsg('Recording...');
-  });
+    // Save settings to storage
+    function saveSettings() {
+        const settings = {
+            micEnabled: micToggle.checked,
+            micPosition: micPosition.value,
+            language: languageSelect.value
+        };
+        chrome.storage.sync.set(settings, () => {
+            console.log('VOX.AI: Settings saved.');
+            // Notify content scripts of the changes
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, { type: 'SETTINGS_UPDATED', settings });
+                }
+            });
+        });
+    }
 
-  stopBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || typeof tab.id === 'undefined') { logMsg('No active tab. Open a page first.'); return; }
-    const r = await sendToTabWithInject(tab.id, { type: 'STOP_RECORDING' });
-    if (r && r.success === false && r.error) logMsg('Stop failed: ' + r.error); else logMsg('Stopped');
-  });
-  // no file upload: VOX.AI records live audio only
+    // Reset settings to default values
+    function resetSettings() {
+        chrome.storage.sync.set(DEFAULTS, () => {
+            loadSettings();
+            console.log('VOX.AI: Settings reset to defaults.');
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, { type: 'SETTINGS_UPDATED', settings: DEFAULTS });
+                }
+            });
+        });
+    }
+
+    // Add event listeners
+    micToggle.addEventListener('change', saveSettings);
+    micPosition.addEventListener('change', saveSettings);
+    languageSelect.addEventListener('change', saveSettings);
+    resetButton.addEventListener('click', resetSettings);
+
+    // Initial load
+    loadSettings();
 });

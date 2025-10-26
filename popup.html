@@ -1,33 +1,168 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vox AI</title>
+    <title>Vox AI Settings</title>
     <link rel="stylesheet" href="util.css" />
-  </head>
-  <body class="p-4 font-sans">
-    <div class="max-w-sm" style="width:340px;background:white;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,0.08)">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <div style="width:44px;height:44px;border-radius:10px;background:#FFD700;display:flex;align-items:center;justify-content:center;color:#111;font-weight:700;font-size:14px">V</div>
-        <div>
-          <div style="font-size:18px;font-weight:700;color:#111">VOX.AI</div>
-          <div style="font-size:12px;color:#666">Voice-first form-filling — local</div>
+    <style>
+        body {
+            width: 380px;
+            background-color: #f9f9f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            padding: 18px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: #FFD700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            color: #222;
+        }
+        .title-group {
+            line-height: 1.2;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #222;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #777;
+        }
+        .settings-group {
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .setting {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .setting:last-child {
+            border-bottom: none;
+        }
+        .setting label {
+            font-size: 15px;
+            color: #333;
+        }
+        select, button {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: #fdfdfd;
+            font-size: 14px;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #4CAF50;
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        .footer {
+            text-align: center;
+        }
+        .reset-button {
+            width: 100%;
+            background: #f1f1f1;
+            color: #d9534f;
+            border-color: #d9534f;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">V</div>
+            <div class="title-group">
+                <div class="title">VOX.AI Settings</div>
+                <div class="subtitle">Configure your experience</div>
+            </div>
         </div>
-      </div>
 
-      <div style="height:78px;display:flex;align-items:center;justify-content:center;flex-direction:column;border-radius:8px;background:linear-gradient(180deg,#faf8f2,#fff7d9);margin-bottom:12px">
-        <div style="font-size:12px;color:#555;margin-bottom:6px">Live recording</div>
-        <button id="start" style="width:84px;height:84px;border-radius:42px;border:none;background:#FFD700;color:#111;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.12)">▶</button>
-      </div>
+        <div class="settings-group">
+            <div class="setting">
+                <label for="floating-mic-toggle">Enable Floating Mic</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="floating-mic-toggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="setting">
+                <label for="mic-position">Mic Position</label>
+                <select id="mic-position">
+                    <option value="top-right">Top Right</option>
+                    <option value="top-left">Top Left</option>
+                    <option value="center">Center</option>
+                </select>
+            </div>
+            <div class="setting">
+                <label for="transcription-language">Language</label>
+                <select id="transcription-language">
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="es-ES">Spanish</option>
+                </select>
+            </div>
+        </div>
 
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button id="inject" style="flex:1;padding:10px;border-radius:8px;border:1px solid #eee;background:white;color:#111;font-weight:600;cursor:pointer">Activate</button>
-        <button id="stop" style="flex:1;padding:10px;border-radius:8px;border:1px solid #eee;background:white;color:#111;font-weight:600;cursor:pointer">Stop</button>
-      </div>
-
-      <div id="log" style="min-height:40px;border-radius:8px;padding:8px;background:#fff;color:#111;font-size:12px;border:1px solid #f0f0f0"></div>
+        <div class="footer">
+            <button id="reset-settings" class="reset-button">Reset to Defaults</button>
+        </div>
     </div>
     <script src="popup.js"></script>
-  </body>
+</body>
 </html>

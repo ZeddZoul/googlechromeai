@@ -110,11 +110,12 @@
     }
 
     if (ev.data.voxai === 'PROCESS_TEXT_INPAGE') {
-      const { text, schema, channel } = ev.data;
+      const { text, schema, context, channel } = ev.data;
       if (!channel) return;
 
       console.log('VOX.AI: Processing text with Nano (Layer 1):', text.substring(0, 50) + '...');
       console.log('VOX.AI: Form schema:', schema);
+      console.log('VOX.AI: Surrounding text context:', context);
 
       try {
         const session = await ensureSession();
@@ -122,9 +123,14 @@
 
         const prompt = `
           You are a helpful assistant that fills out web forms.
-          Based on the following transcription, fill out the form fields described in the JSON schema.
+          Based on the following transcription and surrounding page context, fill out the form fields described in the JSON schema.
           Your response should be a JSON object with a single key: "structured", where the value is an object of the filled form fields.
           Respond in English.
+
+          Surrounding Context:
+          ---
+          ${context || 'No context provided.'}
+          ---
 
           Transcription: "${text}"
 
