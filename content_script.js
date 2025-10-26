@@ -37,11 +37,11 @@ function attachMicsToForms() {
         el.id = micId;
         el.classList.add('voxai-floating-mic');
         el.style.position = 'absolute';
-        el.style.width = '48px';
-        el.style.height = '48px';
-        el.style.borderRadius = '24px';
-        el.style.background = '#FFD700';
-        el.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)';
+        el.style.width = '32px';
+        el.style.height = '32px';
+        el.style.borderRadius = '16px';
+        el.style.background = 'rgba(0,0,0,0.1)';
+        el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
         el.style.display = 'flex';
         el.style.alignItems = 'center';
         el.style.justifyContent = 'center';
@@ -98,6 +98,8 @@ async function handleStartRecording(el, form) {
         recordingState.mediaRecorder.ondataavailable = e => e.data.size && recordingState.chunks.push(e.data);
         recordingState.mediaRecorder.onstop = async () => {
             const blob = new Blob(recordingState.chunks, { type: 'audio/webm' });
+            // The processRecording function now returns a promise that resolves
+            // after the entire message exchange with inpage.js is complete.
             await processRecording(blob, recordingState.fallbackTranscript);
             cleanupAudioResources();
         };
@@ -171,27 +173,37 @@ function startAnalyseLoop() {
     draw();
 }
 
-async function processRecording(blob, savedTranscript) {
-    const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
-    window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
-    window.addEventListener('message', async function onDeviceCheck(e) {
-        if (e.data.channel !== channel) return;
-        window.removeEventListener('message', onDeviceCheck);
+function processRecording(blob, savedTranscript) {
+    return new Promise((resolve) => {
+        const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
 
-        const transcription = savedTranscript; // Simplified for now
-        if (!transcription) return;
-
-        const schema = analyzeForm(recordingState.activeForm);
-        const context = getSurroundingText(recordingState.activeForm);
-        window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
-
-        window.addEventListener('message', function onInpageResponse(e) {
+        const onInpageResponse = (e) => {
             if (e.data.channel !== channel) return;
             window.removeEventListener('message', onInpageResponse);
             if (e.data.payload && e.data.payload.success) {
                 fillForm(e.data.payload.result, recordingState.activeForm);
             }
-        });
+            resolve();
+        };
+
+        const onDeviceCheck = (e) => {
+            if (e.data.channel !== channel) return;
+            window.removeEventListener('message', onDeviceCheck);
+
+            const transcription = savedTranscript;
+            if (!transcription) {
+                return resolve();
+            }
+
+            const schema = analyzeForm(recordingState.activeForm);
+            const context = getSurroundingText(recordingState.activeForm);
+
+            window.addEventListener('message', onInpageResponse);
+            window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
+        };
+
+        window.addEventListener('message', onDeviceCheck);
+        window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
     });
 }
 
@@ -216,6 +228,12 @@ function fillForm(data, form) {
 
 function getSurroundingText(form) {
     let contextText = '';
+    // Robustness: Ensure 'form' is a valid DOM element before proceeding.
+    // A TypeError would occur if 'form' is not an element and lacks element properties.
+    if (!form || typeof form.previousElementSibling === 'undefined') {
+        return contextText;
+    }
+
     let sibling = form.previousElementSibling;
     while (sibling && contextText.length < 500) {
         contextText = (sibling.textContent || '') + '\n' + contextText;

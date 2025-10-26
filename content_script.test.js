@@ -33,13 +33,21 @@ global.AudioContext = jest.fn(() => ({
     }),
     close: jest.fn(),
 }));
-global.MediaRecorder = jest.fn(() => ({
+const mockMediaRecorderInstance = {
     start: jest.fn(),
     stop: jest.fn(),
+    state: 'inactive',
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
-}));
+    ondataavailable: null,
+    onstop: null,
+};
+global.MediaRecorder = jest.fn(() => {
+    mockMediaRecorderInstance.state = 'recording';
+    return mockMediaRecorderInstance;
+});
+
 global.SpeechRecognition = jest.fn().mockImplementation(() => ({
     start: jest.fn(),
     stop: jest.fn(),
@@ -74,6 +82,19 @@ describe('VOX.AI Content Script', () => {
             isRecording: false, isInitializing: false, isStopping: false,
             activeForm: null, currentStream: null,
         });
+
+        // Reset mock MediaRecorder
+        Object.assign(mockMediaRecorderInstance, {
+            start: jest.fn(),
+            stop: jest.fn(),
+            state: 'inactive',
+            addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
+            dispatchEvent: jest.fn(),
+            ondataavailable: null,
+            onstop: null,
+        });
+
         jest.clearAllMocks();
     });
 
@@ -88,9 +109,22 @@ describe('VOX.AI Content Script', () => {
         expect(document.querySelectorAll('.voxai-floating-mic').length).toBe(0);
     });
 
-    test('should get surrounding text', () => {
-        const form = document.getElementById('form1');
-        expect(getSurroundingText(form)).toBe('Some text before the form');
+    describe('getSurroundingText', () => {
+        test('should return the text of the preceding sibling', () => {
+            const form = document.getElementById('form1');
+            expect(getSurroundingText(form)).toBe('Some text before the form');
+        });
+
+        test('should return an empty string if there are no preceding siblings', () => {
+            const form = document.getElementById('form1');
+            form.previousElementSibling.remove();
+            expect(getSurroundingText(form)).toBe('');
+        });
+
+        test('should return an empty string for invalid input', () => {
+            expect(getSurroundingText(null)).toBe('');
+            expect(getSurroundingText(undefined)).toBe('');
+        });
     });
 
     test('should handle start and stop recording', async () => {
@@ -117,5 +151,60 @@ describe('VOX.AI Content Script', () => {
         const data = { structured: { field1: 'test value' } };
         fillForm(data, form);
         expect(form.querySelector('[name="field1"]').value).toBe('test value');
+    });
+
+    test('should orchestrate recording, processing, and form filling', async () => {
+        // 1. Setup
+        const postMessageSpy = jest.spyOn(window, 'postMessage');
+        let onDeviceCheckListener;
+        let onInpageResponseListener;
+
+        // Mock addEventListener to capture the listeners
+        jest.spyOn(window, 'addEventListener').mockImplementation((event, listener) => {
+            if (event === 'message') {
+                if (listener.name === 'onDeviceCheck') {
+                    onDeviceCheckListener = listener;
+                } else if (listener.name === 'onInpageResponse') {
+                    onInpageResponseListener = listener;
+                }
+            }
+        });
+
+        // 2. Start Recording
+        const form = document.getElementById('form1');
+        const mic = document.createElement('div');
+        await handleStartRecording(mic, form);
+        expect(mockMediaRecorderInstance.start).toHaveBeenCalled();
+
+        // 3. Stop Recording
+        recordingState.fallbackTranscript = 'Set Field 1 to hello world';
+        await handleStopRecording(mic);
+        expect(mockMediaRecorderInstance.stop).toHaveBeenCalled();
+
+        // 4. Trigger processing and simulate async flow
+        const onstopPromise = mockMediaRecorderInstance.onstop();
+
+        // Simulate the CHECK_ON_DEVICE message
+        const channel = postMessageSpy.mock.calls[0][0].channel;
+        onDeviceCheckListener({ data: { channel } });
+
+        // Simulate the PROCESS_TEXT_INPAGE message and response
+        const mockAiPayload = { success: true, result: { structured: { field1: 'hello world' } } };
+        onInpageResponseListener({ data: { channel, payload: mockAiPayload } });
+
+        // Wait for all async operations to complete
+        await onstopPromise;
+
+        // 5. Assertions
+        expect(postMessageSpy).toHaveBeenCalledWith(expect.objectContaining({
+            voxai: 'PROCESS_TEXT_INPAGE',
+            context: 'Some text before the form' // This should now pass
+        }), '*');
+        expect(form.querySelector('[name="field1"]').value).toBe('hello world');
+        expect(recordingState.activeForm).toBeNull(); // Check that cleanup happened
+
+        // 6. Cleanup
+        postMessageSpy.mockRestore();
+        window.addEventListener.mockRestore();
     });
 });
