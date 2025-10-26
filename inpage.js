@@ -122,18 +122,22 @@
         console.log('VOX.AI: Nano session ready for form extraction');
 
         const prompt = `
-          You are a helpful assistant that fills out web forms.
-          Based on the following transcription and surrounding page context, fill out the form fields described in the JSON schema.
-          Your response should be a JSON object with a single key: "structured", where the value is an object of the filled form fields.
-          Respond in English.
+          You are a highly precise assistant that fills out web forms based ONLY on the information a user provides.
+          Your task is to analyze the user's speech (transcription) and fill the form fields from the provided JSON schema.
 
-          Surrounding Context:
-          ---
-          ${context || 'No context provided.'}
-          ---
+          **CRITICAL INSTRUCTIONS:**
+          1.  **Be very strict.** Only fill in fields for which the user has explicitly provided a value in their speech.
+          2.  **If no value is given for a field, you MUST omit it entirely from your response.** Do not include the key for that field in the output JSON.
+          3.  **Do not guess or infer values.** Do not use the field's label or name as its value. For example, if the user doesn't state their "Years of Experience", do not return \`"experience": "Years of Experience"\`.
+          4.  **For numeric fields, if no number is provided, do not default to 0.** Omit the field completely.
 
+          Your response MUST be a JSON object with a single key: "structured", where the value is an object containing ONLY the filled form fields.
+
+          ---
+          Surrounding Context: ${context || 'No context provided.'}
+          ---
           Transcription: "${text}"
-
+          ---
           Schema:
           ${JSON.stringify(schema)}
         `;
