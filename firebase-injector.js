@@ -71,7 +71,7 @@
             console.log('VOX.AI [Firebase Injector]: Received text processing request (Layer 2)');
             const { text, schema, context } = event.data;
 
-            const prompt = `
+            const prompt = \`
               You are a highly precise assistant that fills out web forms based ONLY on the information a user provides.
               Your task is to analyze the user's speech (transcription) and fill the form fields from the provided JSON schema.
 
@@ -84,21 +84,21 @@
               Your response MUST be a JSON object with a single key: "structured", where the value is an object containing ONLY the filled form fields.
 
               ---
-              Surrounding Context: ${context || 'No context provided.'}
+              Surrounding Context: \${context || 'No context provided.'}
               ---
-              Transcription: "${text}"
+              Transcription: "\${text}"
               ---
               Schema:
-              ${JSON.stringify(schema)}
-            `;
+              \${JSON.stringify(schema)}
+            \`;
             
             const result = await model.generateContent(prompt);
             let jsonString = result.response.text();
             console.log('VOX.AI [Firebase Injector]: Firebase extraction complete:', jsonString.substring(0, 100) + '...');
             
             // Clean the response to ensure it's valid JSON
-            if (jsonString.includes('```json')) {
-              const jsonMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonString.includes('\\\`\\\`\\\`json')) {
+              const jsonMatch = jsonString.match(/\\\`\\\`\\\`json\\s*([\\s\\S]*?)\\s*\\\`\\\`\\\`/);
               if (jsonMatch) {
                 jsonString = jsonMatch[1].trim();
               }
