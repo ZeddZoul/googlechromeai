@@ -173,38 +173,97 @@ function startAnalyseLoop() {
     draw();
 }
 
-function processRecording(blob, savedTranscript) {
+async function processRecording(blob, fallbackTranscript) {
+    console.log("VOX.AI: Starting multi-layer transcription process...");
+
+    // Layer 1: Try Gemini Nano (On-Device)
+    try {
+        console.log("VOX.AI: Attempting transcription with Gemini Nano (Layer 1)...");
+        const base64Audio = await blobToBase64(blob);
+        const nanoResult = await new Promise((resolve, reject) => {
+            const channel = `voxai_nano_transcribe_${Math.random().toString(36).slice(2)}`;
+            const onNanoResponse = (e) => {
+                if (e.data.channel === channel) {
+                    window.removeEventListener('message', onNanoResponse);
+                    if (e.data.payload && e.data.payload.success) {
+                        resolve(e.data.payload.result.transcription);
+                    } else {
+                        reject(new Error(e.data.payload ? e.data.payload.error : 'Unknown Nano error'));
+                    }
+                }
+            };
+            window.addEventListener('message', onNanoResponse);
+            window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
+        });
+
+        if (nanoResult) {
+            console.log("VOX.AI: Gemini Nano transcription successful (Layer 1).");
+            await processTextWithAI(nanoResult);
+            return;
+        }
+    } catch (error) {
+        console.warn("VOX.AI: Gemini Nano transcription failed (Layer 1).", error);
+    }
+
+    // Layer 2: Try Firebase AI (Cloud)
+    try {
+        console.log("VOX.AI: Attempting transcription with Firebase AI (Layer 2)...");
+        const base64Audio = await blobToBase64(blob);
+        const firebaseResult = await new Promise((resolve, reject) => {
+            const onFirebaseResponse = (e) => {
+                if (e.data.action === 'VOX_FIREBASE_TRANSCRIPTION_RESULT') {
+                    window.removeEventListener('message', onFirebaseResponse);
+                    if (e.data.result) {
+                        resolve(e.data.result);
+                    } else {
+                        reject(new Error(e.data.error || 'Unknown Firebase error'));
+                    }
+                }
+            };
+            window.addEventListener('message', onFirebaseResponse);
+            window.postMessage({ action: 'VOX_TRANSCRIBE_AUDIO', audioBase64: base64Audio }, '*');
+        });
+
+        if (firebaseResult) {
+            console.log("VOX.AI: Firebase AI transcription successful (Layer 2).");
+            await processTextWithAI(firebaseResult);
+            return;
+        }
+    } catch (error) {
+        console.warn("VOX.AI: Firebase AI transcription failed (Layer 2).", error);
+    }
+
+    // Layer 3: Use Web Speech API Fallback
+    if (fallbackTranscript) {
+        console.log("VOX.AI: Using Web Speech API transcription as fallback (Layer 3).");
+        await processTextWithAI(fallbackTranscript);
+    } else {
+        console.error("VOX.AI: All transcription layers failed and no fallback transcript is available.");
+    }
+}
+
+function processTextWithAI(transcription) {
     return new Promise((resolve) => {
+        if (!transcription) {
+            console.warn("VOX.AI: Cannot process empty transcription.");
+            return resolve();
+        }
+
         const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
+        const schema = analyzeForm(recordingState.activeForm);
+        const context = getSurroundingText(recordingState.activeForm);
 
         const onInpageResponse = (e) => {
-            if (e.data.channel !== channel || !e.data.payload) return; // Ignore outgoing messages
+            if (e.data.channel !== channel || !e.data.payload) return;
             window.removeEventListener('message', onInpageResponse);
-
             if (e.data.payload.success) {
                 fillForm(e.data.payload.result, recordingState.activeForm);
             }
             resolve();
         };
 
-        const onDeviceCheck = (e) => {
-            if (e.data.channel !== channel || !e.data.payload) return; // Ignore outgoing messages
-            window.removeEventListener('message', onDeviceCheck);
-
-            const transcription = savedTranscript;
-            if (!transcription) {
-                return resolve();
-            }
-
-            const schema = analyzeForm(recordingState.activeForm);
-            const context = getSurroundingText(recordingState.activeForm);
-
-            window.addEventListener('message', onInpageResponse);
-            window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
-        };
-
-        window.addEventListener('message', onDeviceCheck);
-        window.postMessage({ voxai: 'CHECK_ON_DEVICE', channel }, '*');
+        window.addEventListener('message', onInpageResponse);
+        window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
     });
 }
 
@@ -221,9 +280,29 @@ function analyzeForm(form) {
 
 function fillForm(data, form) {
     if (!data || !data.structured || !form) return;
+
     for (const [name, value] of Object.entries(data.structured)) {
-        const input = form.querySelector(`[name="${name}"]`);
-        if (input) input.value = value;
+        const elements = form.querySelectorAll(`[name="${name}"]`);
+        if (elements.length === 0) continue;
+
+        const el = elements[0];
+
+        if (el.tagName === 'SELECT') {
+            const option = Array.from(el.options).find(o => o.text.toLowerCase() === String(value).toLowerCase());
+            if (option) {
+                el.value = option.value;
+            }
+        } else if (el.type === 'radio') {
+            const radioToSelect = Array.from(elements).find(r => r.value.toLowerCase() === String(value).toLowerCase());
+            if (radioToSelect) {
+                radioToSelect.checked = true;
+            }
+        } else if (el.type === 'checkbox') {
+            // This assumes the value is a boolean or can be interpreted as one.
+            el.checked = Boolean(value);
+        } else {
+            el.value = value;
+        }
     }
 }
 
