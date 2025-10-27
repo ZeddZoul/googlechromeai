@@ -176,7 +176,7 @@ function startAnalyseLoop() {
 async function processRecording(blob, fallbackTranscript) {
     console.log("VOX.AI: Starting multi-layer transcription process...");
 
-    // First, check if Nano is eligible on this device.
+    // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
         const channel = `voxai_nano_eligibility_${Math.random().toString(36).slice(2)}`;
         const onEligibilityResponse = (e) => {
@@ -185,17 +185,18 @@ async function processRecording(blob, fallbackTranscript) {
                 resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
             }
         };
-        // Set a timeout in case inpage.js doesn't respond
         setTimeout(() => {
             window.removeEventListener('message', onEligibilityResponse);
             resolve(false);
-        }, 1000); // 1-second timeout
+        }, 1000);
         window.addEventListener('message', onEligibilityResponse);
         window.postMessage({ voxai: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
     });
 
-    // Layer 1: Try Gemini Nano (On-Device), but only if the device is eligible.
+    let transcription = null;
+
     if (isNanoEligible) {
+        // Layer 1: Try Gemini Nano for transcription.
         try {
             console.log("VOX.AI: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
             const base64Audio = await blobToBase64(blob);
@@ -217,54 +218,59 @@ async function processRecording(blob, fallbackTranscript) {
 
             if (nanoResult) {
                 console.log("VOX.AI: Gemini Nano transcription successful (Layer 1).");
-                await processTextWithAI(nanoResult);
-                return; // Success, end the process here.
+                transcription = nanoResult;
             }
         } catch (error) {
             console.warn("VOX.AI: Gemini Nano transcription failed (Layer 1).", error);
         }
     } else {
-        console.log("VOX.AI: Gemini Nano not eligible or check failed. Proceeding directly to Layer 2 (Firebase).");
+        console.log("VOX.AI: Gemini Nano not eligible. Proceeding to Layer 2 (Firebase).");
     }
 
-    // Layer 2: Try Firebase AI (Cloud)
-    try {
-        console.log("VOX.AI: Attempting transcription with Firebase AI (Layer 2)...");
-        const base64Audio = await blobToBase64(blob);
-        const firebaseResult = await new Promise((resolve, reject) => {
-            const onFirebaseResponse = (e) => {
-                if (e.data.action === 'VOX_FIREBASE_TRANSCRIPTION_RESULT') {
-                    window.removeEventListener('message', onFirebaseResponse);
-                    if (e.data.result) {
-                        resolve(e.data.result);
-                    } else {
-                        reject(new Error(e.data.error || 'Unknown Firebase error'));
+    // Layer 2: If Nano failed or was ineligible, try Firebase AI.
+    if (!transcription) {
+        try {
+            console.log("VOX.AI: Attempting transcription with Firebase AI (Layer 2)...");
+            const base64Audio = await blobToBase64(blob);
+            const firebaseResult = await new Promise((resolve, reject) => {
+                const onFirebaseResponse = (e) => {
+                    if (e.data.action === 'VOX_FIREBASE_TRANSCRIPTION_RESULT') {
+                        window.removeEventListener('message', onFirebaseResponse);
+                        if (e.data.result) {
+                            resolve(e.data.result);
+                        } else {
+                            reject(new Error(e.data.error || 'Unknown Firebase error'));
+                        }
                     }
-                }
-            };
-            window.addEventListener('message', onFirebaseResponse);
-            window.postMessage({ action: 'VOX_TRANSCRIBE_AUDIO', audioBase64: base64Audio }, '*');
-        });
+                };
+                window.addEventListener('message', onFirebaseResponse);
+                window.postMessage({ action: 'VOX_TRANSCRIBE_AUDIO', audioBase64: base64Audio }, '*');
+            });
 
-        if (firebaseResult) {
-            console.log("VOX.AI: Firebase AI transcription successful (Layer 2).");
-            await processTextWithAI(firebaseResult);
-            return;
+            if (firebaseResult) {
+                console.log("VOX.AI: Firebase AI transcription successful (Layer 2).");
+                transcription = firebaseResult;
+            }
+        } catch (error) {
+            console.warn("VOX.AI: Firebase AI transcription failed (Layer 2).", error);
         }
-    } catch (error) {
-        console.warn("VOX.AI: Firebase AI transcription failed (Layer 2).", error);
     }
 
-    // Layer 3: Use Web Speech API Fallback
-    if (fallbackTranscript) {
+    // Layer 3: If all else fails, use the Web Speech API fallback.
+    if (!transcription && fallbackTranscript) {
         console.log("VOX.AI: Using Web Speech API transcription as fallback (Layer 3).");
-        await processTextWithAI(fallbackTranscript);
+        transcription = fallbackTranscript;
+    }
+
+    // Now, process the final transcription.
+    if (transcription) {
+        await processTextWithAI(transcription, isNanoEligible);
     } else {
-        console.error("VOX.AI: All transcription layers failed and no fallback transcript is available.");
+        console.error("VOX.AI: All transcription layers failed.");
     }
 }
 
-async function processTextWithAI(transcription) {
+async function processTextWithAI(transcription, isNanoEligible) {
     if (!transcription) {
         console.warn("VOX.AI: Cannot process empty transcription.");
         return;
@@ -272,23 +278,6 @@ async function processTextWithAI(transcription) {
 
     const schema = analyzeForm(recordingState.activeForm);
     const context = getSurroundingText(recordingState.activeForm);
-
-    // Re-check eligibility for the text processing part.
-    const isNanoEligible = await new Promise((resolve) => {
-        const channel = `voxai_nano_eligibility_${Math.random().toString(36).slice(2)}`;
-        const onEligibilityResponse = (e) => {
-            if (e.data.channel === channel) {
-                window.removeEventListener('message', onEligibilityResponse);
-                resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
-            }
-        };
-        setTimeout(() => {
-            window.removeEventListener('message', onEligibilityResponse);
-            resolve(false);
-        }, 1000);
-        window.addEventListener('message', onEligibilityResponse);
-        window.postMessage({ voxai: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
-    });
 
     if (isNanoEligible) {
         // Layer 1: Use Gemini Nano for text extraction.
@@ -310,30 +299,35 @@ async function processTextWithAI(transcription) {
             });
             fillForm(nanoResult, recordingState.activeForm);
         } catch (error) {
-            console.warn("VOX.AI: Nano text processing failed (Layer 1). No further fallback.", error);
+            console.warn("VOX.AI: Nano text processing failed (Layer 1). Now attempting Firebase fallback (Layer 2).", error);
+            await processTextWithFirebase(transcription, schema, context);
         }
     } else {
         // Layer 2: Use Firebase for text extraction.
         console.log("VOX.AI: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
-        try {
-            const firebaseResult = await new Promise((resolve, reject) => {
-                const onFirebaseResponse = (e) => {
-                    if (e.data.action === 'VOX_FIREBASE_EXTRACTION_RESULT') {
-                        window.removeEventListener('message', onFirebaseResponse);
-                        if (e.data.result) {
-                            resolve(e.data.result);
-                        } else {
-                            reject(new Error(e.data.error || 'Unknown Firebase extraction error'));
-                        }
+        await processTextWithFirebase(transcription, schema, context);
+    }
+}
+
+async function processTextWithFirebase(transcription, schema, context) {
+    try {
+        const firebaseResult = await new Promise((resolve, reject) => {
+            const onFirebaseResponse = (e) => {
+                if (e.data.action === 'VOX_FIREBASE_EXTRACTION_RESULT') {
+                    window.removeEventListener('message', onFirebaseResponse);
+                    if (e.data.result) {
+                        resolve(e.data.result);
+                    } else {
+                        reject(new Error(e.data.error || 'Unknown Firebase extraction error'));
                     }
-                };
-                window.addEventListener('message', onFirebaseResponse);
-                window.postMessage({ action: 'VOX_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
-            });
-            fillForm(firebaseResult, recordingState.activeForm);
-        } catch (error) {
-            console.error("VOX.AI: Firebase text processing failed (Layer 2).", error);
-        }
+                }
+            };
+            window.addEventListener('message', onFirebaseResponse);
+            window.postMessage({ action: 'VOX_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
+        });
+        fillForm(firebaseResult, recordingState.activeForm);
+    } catch (error) {
+        console.error("VOX.AI: Firebase text processing failed (Layer 2).", error);
     }
 }
 
