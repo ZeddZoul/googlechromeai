@@ -66,23 +66,51 @@
           }
         }
         
-        if (event.data.action === 'VOX_EXTRACT_FORM') {
+        if (event.data.action === 'VOX_PROCESS_TEXT_FIREBASE') {
           try {
-            console.log('VOX.AI [Firebase Injector]: Received form extraction request');
-            const text = event.data.text;
-            const prompt = event.data.prompt;
+            console.log('VOX.AI [Firebase Injector]: Received text processing request (Layer 2)');
+            const { text, schema, context } = event.data;
+
+            const prompt = `
+              You are a highly precise assistant that fills out web forms based ONLY on the information a user provides.
+              Your task is to analyze the user's speech (transcription) and fill the form fields from the provided JSON schema.
+
+              **CRITICAL INSTRUCTIONS:**
+              1.  **Be very strict.** Only fill in fields for which the user has explicitly provided a value in their speech.
+              2.  **If no value is given for a field, you MUST omit it entirely from your response.** Do not include the key for that field in the output JSON.
+              3.  **Do not guess or infer values.** Do not use the field's label or name as its value.
+              4.  **For numeric fields, if no number is provided, do not default to 0.** Omit the field completely.
+
+              Your response MUST be a JSON object with a single key: "structured", where the value is an object containing ONLY the filled form fields.
+
+              ---
+              Surrounding Context: ${context || 'No context provided.'}
+              ---
+              Transcription: "${text}"
+              ---
+              Schema:
+              ${JSON.stringify(schema)}
+            `;
             
             const result = await model.generateContent(prompt);
-            const extraction = result.response.text();
-            console.log('VOX.AI [Firebase Injector]: Form extraction complete:', extraction.substring(0, 100) + '...');
+            let jsonString = result.response.text();
+            console.log('VOX.AI [Firebase Injector]: Firebase extraction complete:', jsonString.substring(0, 100) + '...');
             
-            // Send result back to content script
+            // Clean the response to ensure it's valid JSON
+            if (jsonString.includes('```json')) {
+              const jsonMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
+              if (jsonMatch) {
+                jsonString = jsonMatch[1].trim();
+              }
+            }
+            const json = JSON.parse(jsonString);
+
             window.postMessage({
               action: 'VOX_FIREBASE_EXTRACTION_RESULT',
-              result: extraction
+              result: json
             }, '*');
           } catch (error) {
-            console.error('VOX.AI [Firebase Injector]: Form extraction failed:', error);
+            console.error('VOX.AI [Firebase Injector]: Firebase text processing failed:', error);
             window.postMessage({
               action: 'VOX_FIREBASE_EXTRACTION_RESULT',
               error: error.message

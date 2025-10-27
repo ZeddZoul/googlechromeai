@@ -264,29 +264,77 @@ async function processRecording(blob, fallbackTranscript) {
     }
 }
 
-function processTextWithAI(transcription) {
-    return new Promise((resolve) => {
-        if (!transcription) {
-            console.warn("VOX.AI: Cannot process empty transcription.");
-            return resolve();
-        }
+async function processTextWithAI(transcription) {
+    if (!transcription) {
+        console.warn("VOX.AI: Cannot process empty transcription.");
+        return;
+    }
 
-        const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
-        const schema = analyzeForm(recordingState.activeForm);
-        const context = getSurroundingText(recordingState.activeForm);
+    const schema = analyzeForm(recordingState.activeForm);
+    const context = getSurroundingText(recordingState.activeForm);
 
-        const onInpageResponse = (e) => {
-            if (e.data.channel !== channel || !e.data.payload) return;
-            window.removeEventListener('message', onInpageResponse);
-            if (e.data.payload.success) {
-                fillForm(e.data.payload.result, recordingState.activeForm);
+    // Re-check eligibility for the text processing part.
+    const isNanoEligible = await new Promise((resolve) => {
+        const channel = `voxai_nano_eligibility_${Math.random().toString(36).slice(2)}`;
+        const onEligibilityResponse = (e) => {
+            if (e.data.channel === channel) {
+                window.removeEventListener('message', onEligibilityResponse);
+                resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
             }
-            resolve();
         };
-
-        window.addEventListener('message', onInpageResponse);
-        window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
+        setTimeout(() => {
+            window.removeEventListener('message', onEligibilityResponse);
+            resolve(false);
+        }, 1000);
+        window.addEventListener('message', onEligibilityResponse);
+        window.postMessage({ voxai: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
     });
+
+    if (isNanoEligible) {
+        // Layer 1: Use Gemini Nano for text extraction.
+        console.log("VOX.AI: Processing text with Gemini Nano (Layer 1)...");
+        try {
+            const nanoResult = await new Promise((resolve, reject) => {
+                const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
+                const onInpageResponse = (e) => {
+                    if (e.data.channel !== channel || !e.data.payload) return;
+                    window.removeEventListener('message', onInpageResponse);
+                    if (e.data.payload.success) {
+                        resolve(e.data.payload.result);
+                    } else {
+                        reject(new Error(e.data.payload.error || 'Unknown Nano text processing error'));
+                    }
+                };
+                window.addEventListener('message', onInpageResponse);
+                window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
+            });
+            fillForm(nanoResult, recordingState.activeForm);
+        } catch (error) {
+            console.warn("VOX.AI: Nano text processing failed (Layer 1). No further fallback.", error);
+        }
+    } else {
+        // Layer 2: Use Firebase for text extraction.
+        console.log("VOX.AI: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
+        try {
+            const firebaseResult = await new Promise((resolve, reject) => {
+                const onFirebaseResponse = (e) => {
+                    if (e.data.action === 'VOX_FIREBASE_EXTRACTION_RESULT') {
+                        window.removeEventListener('message', onFirebaseResponse);
+                        if (e.data.result) {
+                            resolve(e.data.result);
+                        } else {
+                            reject(new Error(e.data.error || 'Unknown Firebase extraction error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onFirebaseResponse);
+                window.postMessage({ action: 'VOX_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
+            });
+            fillForm(firebaseResult, recordingState.activeForm);
+        } catch (error) {
+            console.error("VOX.AI: Firebase text processing failed (Layer 2).", error);
+        }
+    }
 }
 
 function analyzeForm(form) {
