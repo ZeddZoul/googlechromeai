@@ -37,6 +37,30 @@
   window.addEventListener('message', async (ev) => {
     if (!ev.data || !ev.data.voxai) return;
 
+    if (ev.data.voxai === 'CHECK_NANO_ELIGIBILITY') {
+      const { channel } = ev.data;
+      if (!channel) return;
+
+      console.log('VOX.AI: Checking Nano eligibility...');
+      let isEligible = false;
+      try {
+        if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
+          const availability = await LanguageModel.availability(modelCapabilities);
+          isEligible = availability !== 'unavailable';
+          console.log('VOX.AI: Nano availability status:', availability);
+        } else {
+          console.log('VOX.AI: LanguageModel API not found for eligibility check.');
+        }
+      } catch (e) {
+        console.error('VOX.AI: Error during Nano eligibility check:', e);
+        isEligible = false;
+      }
+
+      console.log('VOX.AI: Nano eligibility:', isEligible);
+      respond(channel, { success: true, isEligible });
+      return;
+    }
+
     if (ev.data.voxai === 'CHECK_ON_DEVICE') {
       const { channel } = ev.data;
       if (!channel) return;
@@ -110,24 +134,34 @@
     }
 
     if (ev.data.voxai === 'PROCESS_TEXT_INPAGE') {
-      const { text, schema, channel } = ev.data;
+      const { text, schema, context, channel } = ev.data;
       if (!channel) return;
 
       console.log('VOX.AI: Processing text with Nano (Layer 1):', text.substring(0, 50) + '...');
       console.log('VOX.AI: Form schema:', schema);
+      console.log('VOX.AI: Surrounding text context:', context);
 
       try {
         const session = await ensureSession();
         console.log('VOX.AI: Nano session ready for form extraction');
 
         const prompt = `
-          You are a helpful assistant that fills out web forms.
-          Based on the following transcription, fill out the form fields described in the JSON schema.
-          Your response should be a JSON object with a single key: "structured", where the value is an object of the filled form fields.
-          Respond in English.
+          You are a highly precise assistant that fills out web forms based ONLY on the information a user provides.
+          Your task is to analyze the user's speech (transcription) and fill the form fields from the provided JSON schema.
 
+          **CRITICAL INSTRUCTIONS:**
+          1.  **Be very strict.** Only fill in fields for which the user has explicitly provided a value in their speech.
+          2.  **If no value is given for a field, you MUST omit it entirely from your response.** Do not include the key for that field in the output JSON.
+          3.  **Do not guess or infer values.** Do not use the field's label or name as its value. For example, if the user doesn't state their "Years of Experience", do not return \`"experience": "Years of Experience"\`.
+          4.  **For numeric fields, if no number is provided, do not default to 0.** Omit the field completely.
+
+          Your response MUST be a JSON object with a single key: "structured", where the value is an object containing ONLY the filled form fields.
+
+          ---
+          Surrounding Context: ${context || 'No context provided.'}
+          ---
           Transcription: "${text}"
-
+          ---
           Schema:
           ${JSON.stringify(schema)}
         `;
