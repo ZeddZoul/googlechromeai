@@ -176,33 +176,55 @@ function startAnalyseLoop() {
 async function processRecording(blob, fallbackTranscript) {
     console.log("VOX.AI: Starting multi-layer transcription process...");
 
-    // Layer 1: Try Gemini Nano (On-Device)
-    try {
-        console.log("VOX.AI: Attempting transcription with Gemini Nano (Layer 1)...");
-        const base64Audio = await blobToBase64(blob);
-        const nanoResult = await new Promise((resolve, reject) => {
-            const channel = `voxai_nano_transcribe_${Math.random().toString(36).slice(2)}`;
-            const onNanoResponse = (e) => {
-                if (e.data.channel === channel) {
-                    window.removeEventListener('message', onNanoResponse);
-                    if (e.data.payload && e.data.payload.success) {
-                        resolve(e.data.payload.result.transcription);
-                    } else {
-                        reject(new Error(e.data.payload ? e.data.payload.error : 'Unknown Nano error'));
-                    }
-                }
-            };
-            window.addEventListener('message', onNanoResponse);
-            window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
-        });
+    // First, check if Nano is eligible on this device.
+    const isNanoEligible = await new Promise((resolve) => {
+        const channel = `voxai_nano_eligibility_${Math.random().toString(36).slice(2)}`;
+        const onEligibilityResponse = (e) => {
+            if (e.data.channel === channel) {
+                window.removeEventListener('message', onEligibilityResponse);
+                resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
+            }
+        };
+        // Set a timeout in case inpage.js doesn't respond
+        setTimeout(() => {
+            window.removeEventListener('message', onEligibilityResponse);
+            resolve(false);
+        }, 1000); // 1-second timeout
+        window.addEventListener('message', onEligibilityResponse);
+        window.postMessage({ voxai: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
+    });
 
-        if (nanoResult) {
-            console.log("VOX.AI: Gemini Nano transcription successful (Layer 1).");
-            await processTextWithAI(nanoResult);
-            return;
+    // Layer 1: Try Gemini Nano (On-Device), but only if the device is eligible.
+    if (isNanoEligible) {
+        try {
+            console.log("VOX.AI: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
+            const base64Audio = await blobToBase64(blob);
+            const nanoResult = await new Promise((resolve, reject) => {
+                const channel = `voxai_nano_transcribe_${Math.random().toString(36).slice(2)}`;
+                const onNanoResponse = (e) => {
+                    if (e.data.channel === channel) {
+                        window.removeEventListener('message', onNanoResponse);
+                        if (e.data.payload && e.data.payload.success) {
+                            resolve(e.data.payload.result.transcription);
+                        } else {
+                            reject(new Error(e.data.payload ? e.data.payload.error : 'Unknown Nano error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onNanoResponse);
+                window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
+            });
+
+            if (nanoResult) {
+                console.log("VOX.AI: Gemini Nano transcription successful (Layer 1).");
+                await processTextWithAI(nanoResult);
+                return; // Success, end the process here.
+            }
+        } catch (error) {
+            console.warn("VOX.AI: Gemini Nano transcription failed (Layer 1).", error);
         }
-    } catch (error) {
-        console.warn("VOX.AI: Gemini Nano transcription failed (Layer 1).", error);
+    } else {
+        console.log("VOX.AI: Gemini Nano not eligible or check failed. Proceeding directly to Layer 2 (Firebase).");
     }
 
     // Layer 2: Try Firebase AI (Cloud)

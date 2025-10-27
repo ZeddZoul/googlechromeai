@@ -37,6 +37,30 @@
   window.addEventListener('message', async (ev) => {
     if (!ev.data || !ev.data.voxai) return;
 
+    if (ev.data.voxai === 'CHECK_NANO_ELIGIBILITY') {
+      const { channel } = ev.data;
+      if (!channel) return;
+
+      console.log('VOX.AI: Checking Nano eligibility...');
+      let isEligible = false;
+      try {
+        if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
+          const availability = await LanguageModel.availability(modelCapabilities);
+          isEligible = availability !== 'unavailable';
+          console.log('VOX.AI: Nano availability status:', availability);
+        } else {
+          console.log('VOX.AI: LanguageModel API not found for eligibility check.');
+        }
+      } catch (e) {
+        console.error('VOX.AI: Error during Nano eligibility check:', e);
+        isEligible = false;
+      }
+
+      console.log('VOX.AI: Nano eligibility:', isEligible);
+      respond(channel, { success: true, isEligible });
+      return;
+    }
+
     if (ev.data.voxai === 'CHECK_ON_DEVICE') {
       const { channel } = ev.data;
       if (!channel) return;
