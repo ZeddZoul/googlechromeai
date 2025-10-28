@@ -1,6 +1,6 @@
-# VOX.AI — Chrome Extension (Prototype)
+# Survsay — Chrome Extension (Prototype)
 
-VOX.AI is a privacy-first Chrome Extension prototype that demonstrates a client-side flow to record audio, transcribe it with an on-device AI (Gemini Nano), map the transcription to a form schema, and auto-fill web forms.
+Survsay is a privacy-first Chrome Extension prototype that demonstrates a client-side flow to record audio, transcribe it with an on-device AI (Gemini Nano), map the transcription to a form schema, and auto-fill web forms.
 
 ## ⚠️ Requirements
 
@@ -26,7 +26,7 @@ Files added:
 - `service_worker.js` — background worker (minimal messaging). AI calls are run in-page via the Prompt API per browser docs.
 - `content_script.js` — injects floating microphone, analyzes forms, records audio, fills fields
 - `popup.html` / `popup.js` — small popup with notes and README link
-- `tailwind.css` — small utility CSS matching VOX.AI branding
+- `tailwind.css` — small utility CSS matching Survsay branding
 
 Important: Gemini Nano / Prompt API notes
 

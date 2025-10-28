@@ -1,8 +1,8 @@
-# VOX.AI - Feature Inventory & Scaling Roadmap
+# Survsay - Feature Inventory & Scaling Roadmap
 
 ## 🎯 Project Overview
 
-**VOX.AI** is a Chrome extension that fills complex web forms using voice input. It combines on-device AI (Gemini Nano), cloud AI (Firebase Generative AI), and browser-native APIs in a hybrid fallback architecture for maximum reliability.
+**Survsay** is a Chrome extension that fills complex web forms using voice input. It combines on-device AI (Gemini Nano), cloud AI (Firebase Generative AI), and browser-native APIs in a hybrid fallback architecture for maximum reliability.
 
 **Status:** Beta (Hackathon Release)  
 **Author:** ZeddZoul  
@@ -106,7 +106,7 @@ Extract triggered → Check Nano availability
 
 **Floating Microphone Widget**
 - **Position:** Fixed bottom-right corner (72px diameter)
-- **Color:** VOX.AI Gold (#FFD700) when idle, Red (#ff6b6b) when recording
+- **Color:** Survsay Gold (#FFD700) when idle, Red (#ff6b6b) when recording
 - **Visual Feedback:**
   - Real-time VU meter visualization (9-bar level display)
   - Recording pulse animation
@@ -120,7 +120,7 @@ Extract triggered → Check Nano availability
 - **Animation:** Slide-in/out with fade
 - **Examples:**
   - "No speech detected. Please try again."
-  - "VOX.AI is experiencing some distress on this device. Try again later."
+  - "Survsay is experiencing some distress on this device. Try again later."
   - Success animations (if implemented)
 
 **Recording Experience**
@@ -139,7 +139,7 @@ Extract triggered → Check Nano availability
 
 **Error Messages (User-Facing)**
 - "No speech detected. Please try again."
-- "VOX.AI is experiencing some distress on this device. Try again later."
+- "Survsay is experiencing some distress on this device. Try again later."
 
 **Error Tracking (Developer Console)**
 - Layer-specific logging (Firebase layer 2, Nano layer 1, etc.)
@@ -187,7 +187,7 @@ Extract triggered → Check Nano availability
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   VOX.AI EXTENSION                      │
+│                   Survsay EXTENSION                      │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  content_script.js                                      │

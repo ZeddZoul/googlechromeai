@@ -1,4 +1,4 @@
-# VOX.AI - Hybrid AI Architecture Implementation Plan
+# Survsay - Hybrid AI Architecture Implementation Plan
 
 ## ✅ COMPLETED STEPS
 
@@ -106,7 +106,7 @@ fillForm(extracted_data)
 | 3 | Pattern-matching | Fast | Low | Free |
 
 ### Error Handling
-- Apple-style notifications: "VOX.AI is experiencing some distress on this device. Try again later."
+- Apple-style notifications: "Survsay is experiencing some distress on this device. Try again later."
 - Silent fallbacks between layers
 - Comprehensive console logging for debugging
 

@@ -5,10 +5,10 @@
 
   function respond(channel, payload) {
     try {
-      console.log('VOX.AI: inpage.js responding on channel:', channel, 'with payload:', payload);
+      console.log('Survsay: inpage.js responding on channel:', channel, 'with payload:', payload);
       window.postMessage({ channel, payload }, '*');
     } catch (e) {
-      console.error('VOX.AI: inpage.js respond error:', e);
+      console.error('Survsay: inpage.js respond error:', e);
       const safe = { success: false, error: 'Failed to post response: ' + String(e) };
       window.postMessage({ channel, payload: safe }, '*');
     }
@@ -41,22 +41,22 @@
       const { channel } = ev.data;
       if (!channel) return;
 
-      console.log('VOX.AI: Checking Nano eligibility...');
+      console.log('Survsay: Checking Nano eligibility...');
       let isEligible = false;
       try {
         if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
           const availability = await LanguageModel.availability(modelCapabilities);
           isEligible = availability !== 'unavailable';
-          console.log('VOX.AI: Nano availability status:', availability);
+          console.log('Survsay: Nano availability status:', availability);
         } else {
-          console.log('VOX.AI: LanguageModel API not found for eligibility check.');
+          console.log('Survsay: LanguageModel API not found for eligibility check.');
         }
       } catch (e) {
-        console.error('VOX.AI: Error during Nano eligibility check:', e);
+        console.error('Survsay: Error during Nano eligibility check:', e);
         isEligible = false;
       }
 
-      console.log('VOX.AI: Nano eligibility:', isEligible);
+      console.log('Survsay: Nano eligibility:', isEligible);
       respond(channel, { success: true, isEligible });
       return;
     }
@@ -65,34 +65,34 @@
       const { channel } = ev.data;
       if (!channel) return;
 
-      console.log('VOX.AI: Checking on-device availability...');
+      console.log('Survsay: Checking on-device availability...');
       let isAvailable = false;
       let session = null;
       try {
         if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
           const availability = await LanguageModel.availability(modelCapabilities);
           isAvailable = availability !== 'unavailable';
-          console.log('VOX.AI: LanguageModel availability:', availability);
+          console.log('Survsay: LanguageModel availability:', availability);
           
           // If available, create session for form extraction (Layer 1)
           if (isAvailable) {
             try {
               session = await ensureSession();
-              console.log('VOX.AI: Nano session ready for form extraction');
+              console.log('Survsay: Nano session ready for form extraction');
             } catch (e) {
-              console.warn('VOX.AI: Could not create Nano session', e);
+              console.warn('Survsay: Could not create Nano session', e);
               session = null;
             }
           }
         } else {
-          console.log('VOX.AI: LanguageModel not available');
+          console.log('Survsay: LanguageModel not available');
         }
       } catch (e) {
-        console.log('VOX.AI: LanguageModel check failed:', e);
+        console.log('Survsay: LanguageModel check failed:', e);
         isAvailable = false;
       }
 
-      console.log('VOX.AI: On-device available:', isAvailable);
+      console.log('Survsay: On-device available:', isAvailable);
       respond(channel, { isAvailable, session: isAvailable ? 'available' : null });
       return;
     }
@@ -101,15 +101,15 @@
       const { audioBase64, channel } = ev.data;
       if (!channel) return;
 
-      console.log('VOX.AI: Processing audio in page, base64 length:', audioBase64.length);
+      console.log('Survsay: Processing audio in page, base64 length:', audioBase64.length);
 
       try {
         const session = await ensureSession();
-        console.log('VOX.AI: Session created for audio processing...');
+        console.log('Survsay: Session created for audio processing...');
 
         const prompt = `Please transcribe the following audio. Return only the transcribed text, nothing else.`;
 
-        console.log('VOX.AI: Calling session.prompt for audio transcription...');
+        console.log('Survsay: Calling session.prompt for audio transcription...');
         const result = await session.prompt(prompt, {
           contents: [
             { role: "user", parts: [{ text: prompt }] },
@@ -118,17 +118,17 @@
           ]
         });
 
-        console.log('VOX.AI: Audio transcription result:', result);
+        console.log('Survsay: Audio transcription result:', result);
 
         // Check if the result is actually a transcription or just a generic response
         if (result && result.length > 10 && !result.includes("paste the audio") && !result.includes("transcribe it")) {
           respond(channel, { success: true, result: { transcription: result } });
         } else {
-          console.log('VOX.AI: On-device transcription returned generic response, treating as failure');
+          console.log('Survsay: On-device transcription returned generic response, treating as failure');
           respond(channel, { success: false, error: 'On-device transcription failed - generic response' });
         }
       } catch (err) {
-        console.error('VOX.AI audio processing error', err);
+        console.error('Survsay audio processing error', err);
         respond(channel, { success: false, error: String(err) });
       }
     }
@@ -137,13 +137,13 @@
       const { text, schema, context, channel } = ev.data;
       if (!channel) return;
 
-      console.log('VOX.AI: Processing text with Nano (Layer 1):', text.substring(0, 50) + '...');
-      console.log('VOX.AI: Form schema:', schema);
-      console.log('VOX.AI: Surrounding text context:', context);
+      console.log('Survsay: Processing text with Nano (Layer 1):', text.substring(0, 50) + '...');
+      console.log('Survsay: Form schema:', schema);
+      console.log('Survsay: Surrounding text context:', context);
 
       try {
         const session = await ensureSession();
-        console.log('VOX.AI: Nano session ready for form extraction');
+        console.log('Survsay: Nano session ready for form extraction');
 
         const prompt = `
           You are a highly precise assistant that fills out web forms based ONLY on the information a user provides.
@@ -166,9 +166,9 @@
           ${JSON.stringify(schema)}
         `;
 
-        console.log('VOX.AI: Calling Nano model for extraction with language=en...');
+        console.log('Survsay: Calling Nano model for extraction with language=en...');
         const result = await session.prompt(prompt);
-        console.log('VOX.AI: Nano extraction result:', result);
+        console.log('Survsay: Nano extraction result:', result);
 
         // Extract JSON from markdown format if present
         let jsonString = result;
@@ -179,12 +179,12 @@
           }
         }
 
-        console.log('VOX.AI: Extracted JSON string:', jsonString);
+        console.log('Survsay: Extracted JSON string:', jsonString);
         const json = JSON.parse(jsonString);
-        console.log('VOX.AI: Nano extraction successful:', json);
+        console.log('Survsay: Nano extraction successful:', json);
         respond(channel, { success: true, result: json });
       } catch (err) {
-        console.warn('VOX.AI: Nano extraction failed (Layer 1 will fallback to Firebase):', err);
+        console.warn('Survsay: Nano extraction failed (Layer 1 will fallback to Firebase):', err);
         // Return failure - content_script will use Firebase fallback (Layer 2)
         respond(channel, { success: false, error: String(err) });
       }

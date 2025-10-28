@@ -1,4 +1,4 @@
-# VOX.AI - Feature Inventory & Scaling Roadmap
+# Survsay - Feature Inventory & Scaling Roadmap
 
 ## 🎯 Current Features (v1.0 - Hackathon)
 
@@ -79,15 +79,15 @@
 - [ ] **Undo/Redo/Clear** - Revert operations
 - [ ] **Accessibility mode** - Screen reader optimization
 - [ ] **Onboarding tutorial** - First-time user guide
-- [ ] **Permission management** - Control which sites can access VOX.AI
+- [ ] **Permission management** - Control which sites can access Survsay
 
 ### Category E: Advanced Features
 - [ ] **Batch form filling** - Auto-fill multiple forms on same page
 - [ ] **Export/Import templates** - Save form responses as JSON/CSV
 - [ ] **Analytics dashboard** - Success rates, most-used forms, performance metrics
-- [ ] **API mode** - Let websites integrate VOX.AI natively
+- [ ] **API mode** - Let websites integrate Survsay natively
 - [ ] **Sync across devices** - Cloud sync of templates & history
-- [ ] **Form auto-detection** - Suggest VOX.AI on detected forms
+- [ ] **Form auto-detection** - Suggest Survsay on detected forms
 - [ ] **Webhook integration** - Send form data to custom endpoints
 - [ ] **Offline mode** - Cache Nano models for offline form extraction
 

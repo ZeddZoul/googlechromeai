@@ -1,10 +1,10 @@
-# VOX.AI Architecture Diagrams & Flow Charts
+# Survsay Architecture Diagrams & Flow Charts
 
 ## System Architecture
 
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃           CHROME EXTENSION (VOX.AI)                 ┃
+┃           CHROME EXTENSION (Survsay)                ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃                                                    ┃
 ┃  ┌─────────────────────────────────────────────┐ ┃
@@ -419,4 +419,4 @@ Failure Case (All offline + no Nano):
 
 ---
 
-**These diagrams represent the complete VOX.AI architecture and flow! 🎨**
+**These diagrams represent the complete Survsay architecture and flow! 🎨**
