@@ -37,9 +37,9 @@ function attachMicsToForms() {
         el.id = micId;
         el.classList.add('survsay-floating-mic');
         el.style.position = 'absolute';
-        el.style.background = '#7C3AED';
-        el.style.color = 'white';
-        el.style.border = 'none';
+        el.style.background = 'white';
+        el.style.color = 'black';
+        el.style.border = '1px solid #7C3AED';
         el.style.borderRadius = '8px';
         el.style.padding = '8px 12px';
         el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
@@ -56,21 +56,38 @@ function attachMicsToForms() {
         el.style.transform = 'translateY(5px)';
         el.title = 'Survsay - Click to fill this form with your voice';
 
-        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#fff"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#fff" opacity="0.9"/></svg>`;
+        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#7C3AED"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#7C3AED" opacity="0.9"/></svg>`;
         el.innerHTML = `${micIconSvg}<span>fill this form with survsay</span>`;
 
-        form.style.position = 'relative';
-        form.appendChild(el);
+        document.body.appendChild(el); // Append to body to avoid form layout issues
 
-        chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
-            if (settings.micPosition === 'top-left') {
-                el.style.top = '10px';
-                el.style.left = '10px';
-            } else { // Default to top-right
-                el.style.top = '10px';
-                el.style.right = '10px';
-            }
-        });
+        const setPosition = () => {
+            const formRect = form.getBoundingClientRect();
+            chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
+                const pos = settings.micPosition;
+                el.style.position = 'fixed'; // Use fixed positioning
+
+                if (pos.includes('top')) {
+                    el.style.top = `${formRect.top - el.offsetHeight - 5}px`; // 5px above
+                }
+                if (pos.includes('bottom')) {
+                    el.style.top = `${formRect.bottom + 5}px`; // 5px below
+                }
+                if (pos.includes('left')) {
+                    el.style.left = `${formRect.left}px`;
+                }
+                if (pos.includes('right')) {
+                    el.style.left = `${formRect.right - el.offsetWidth}px`;
+                }
+            });
+        };
+
+        // Store the reposition function on the element for later removal
+        el.__survsay_reposition = setPosition;
+
+        // Set initial position and update on window resize
+        setTimeout(setPosition, 100); // Delay to ensure button is rendered for size calcs
+        window.addEventListener('resize', setPosition);
 
         form.addEventListener('mouseenter', () => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
         form.addEventListener('mouseleave', () => { if (!el.classList.contains('survsay-recording')) { el.style.opacity = '0'; el.style.transform = 'translateY(5px)'; } });
@@ -84,7 +101,10 @@ function attachMicsToForms() {
 
 function removeAllMics() {
     const mics = document.querySelectorAll('.survsay-floating-mic');
-    mics.forEach(mic => mic.remove());
+    mics.forEach(mic => {
+        window.removeEventListener('resize', mic.__survsay_reposition);
+        mic.remove();
+    });
 }
 
 async function handleStartRecording(el, form) {
@@ -132,7 +152,10 @@ async function handleStartRecording(el, form) {
         recordingState.isRecording = true;
         el.classList.add('survsay-recording');
         el.style.background = '#6b21a8'; // Darker purple for recording state
+        el.style.color = 'white';
         el.querySelector('span').textContent = 'Recording...';
+        // Make sure all SVG paths turn white
+        el.querySelectorAll('svg path').forEach(p => p.style.fill = 'white');
     } catch (err) {
         console.error('Survsay: Failed to start recording:', err);
         cleanupAudioResources();
@@ -146,8 +169,11 @@ async function handleStopRecording(el) {
     if (recordingState.mediaRecorder && recordingState.mediaRecorder.state !== 'inactive') recordingState.mediaRecorder.stop();
     else cleanupAudioResources();
     el.classList.remove('survsay-recording');
-    el.style.background = '#7C3AED'; // Back to original purple
+    el.style.background = 'white'; // Back to original white
+    el.style.color = 'black';
     el.querySelector('span').textContent = 'fill this form with survsay';
+    // And all SVG paths back to purple
+    el.querySelectorAll('svg path').forEach(p => p.style.fill = '#7C3AED');
     recordingState.isStopping = false;
 }
 
@@ -182,7 +208,7 @@ async function processRecording(blob, fallbackTranscript) {
             resolve(false);
         }, 1000);
         window.addEventListener('message', onEligibilityResponse);
-        window.postMessage({ voxai: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
+        window.postMessage({ survsay: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
     });
 
     let transcription = null;
@@ -205,7 +231,7 @@ async function processRecording(blob, fallbackTranscript) {
                     }
                 };
                 window.addEventListener('message', onNanoResponse);
-                window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
+                window.postMessage({ survsay: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
             });
 
             if (nanoResult) {
@@ -287,7 +313,7 @@ async function processTextWithAI(transcription, isNanoEligible) {
                     }
                 };
                 window.addEventListener('message', onInpageResponse);
-                window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
+                window.postMessage({ survsay: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
             });
             fillForm(nanoResult, recordingState.activeForm);
         } catch (error) {

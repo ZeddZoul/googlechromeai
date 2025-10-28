@@ -23,25 +23,25 @@
     
     try {
       const app = initializeApp(firebaseConfig);
-      console.log('VOX.AI [Firebase Injector]: Firebase app initialized');
+      console.log('Survsay [Firebase Injector]: Firebase app initialized');
       
       const ai = getAI(app, { backend: new GoogleAIBackend() });
-      console.log('VOX.AI [Firebase Injector]: Gemini Developer API initialized');
+      console.log('Survsay [Firebase Injector]: Gemini Developer API initialized');
       
       const model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-      console.log('VOX.AI [Firebase Injector]: Generative model created (gemini-2.5-flash)');
+      console.log('Survsay [Firebase Injector]: Generative model created (gemini-2.5-flash)');
       
       // Expose to global scope for content scripts to access
-      window.__voxai_firebase_app = app;
-      window.__voxai_firebase_ai = ai;
-      window.__voxai_firebase_model = model;
-      window.__voxai_firebase_ready = true;
+      window.__survsay_firebase_app = app;
+      window.__survsay_firebase_ai = ai;
+      window.__survsay_firebase_model = model;
+      window.__survsay_firebase_ready = true;
       
       // Listen for transcription requests from content script
       window.addEventListener('message', async (event) => {
-        if (event.data.action === 'VOX_TRANSCRIBE_AUDIO') {
+        if (event.data.action === 'SURVSAY_TRANSCRIBE_AUDIO') {
           try {
-            console.log('VOX.AI [Firebase Injector]: Received transcription request');
+            console.log('Survsay [Firebase Injector]: Received transcription request');
             const base64Audio = event.data.audioBase64;
             
             const result = await model.generateContent([
@@ -50,25 +50,25 @@
             ]);
             
             const transcription = result.response.text();
-            console.log('VOX.AI [Firebase Injector]: Transcription complete:', transcription.substring(0, 100) + '...');
+            console.log('Survsay [Firebase Injector]: Transcription complete:', transcription.substring(0, 100) + '...');
             
             // Send result back to content script
             window.postMessage({
-              action: 'VOX_FIREBASE_TRANSCRIPTION_RESULT',
+              action: 'SURVSAY_FIREBASE_TRANSCRIPTION_RESULT',
               result: transcription
             }, '*');
           } catch (error) {
-            console.error('VOX.AI [Firebase Injector]: Transcription failed:', error);
+            console.error('Survsay [Firebase Injector]: Transcription failed:', error);
             window.postMessage({
-              action: 'VOX_FIREBASE_TRANSCRIPTION_RESULT',
+              action: 'SURVSAY_FIREBASE_TRANSCRIPTION_RESULT',
               error: error.message
             }, '*');
           }
         }
         
-        if (event.data.action === 'VOX_PROCESS_TEXT_FIREBASE') {
+        if (event.data.action === 'SURVSAY_PROCESS_TEXT_FIREBASE') {
           try {
-            console.log('VOX.AI [Firebase Injector]: Received text processing request (Layer 2)');
+            console.log('Survsay [Firebase Injector]: Received text processing request (Layer 2)');
             const { text, schema, context } = event.data;
 
             const prompt = \`
@@ -94,7 +94,7 @@
             
             const result = await model.generateContent(prompt);
             let jsonString = result.response.text();
-            console.log('VOX.AI [Firebase Injector]: Firebase extraction complete:', jsonString.substring(0, 100) + '...');
+            console.log('Survsay [Firebase Injector]: Firebase extraction complete:', jsonString.substring(0, 100) + '...');
             
             // Clean the response to ensure it's valid JSON
             if (jsonString.includes('\\\`\\\`\\\`json')) {
@@ -106,33 +106,33 @@
             const json = JSON.parse(jsonString);
 
             window.postMessage({
-              action: 'VOX_FIREBASE_EXTRACTION_RESULT',
+              action: 'SURVSAY_FIREBASE_EXTRACTION_RESULT',
               result: json
             }, '*');
           } catch (error) {
-            console.error('VOX.AI [Firebase Injector]: Firebase text processing failed:', error);
+            console.error('Survsay [Firebase Injector]: Firebase text processing failed:', error);
             window.postMessage({
-              action: 'VOX_FIREBASE_EXTRACTION_RESULT',
+              action: 'SURVSAY_FIREBASE_EXTRACTION_RESULT',
               error: error.message
             }, '*');
           }
         }
         
-        if (event.data.action === 'VOX_QUERY_FIREBASE') {
-          console.log('VOX.AI [Firebase Injector]: Received Firebase availability query');
+        if (event.data.action === 'SURVSAY_QUERY_FIREBASE') {
+          console.log('Survsay [Firebase Injector]: Received Firebase availability query');
           window.postMessage({
-            action: 'VOX_FIREBASE_READY',
+            action: 'SURVSAY_FIREBASE_READY',
             ready: true
           }, '*');
         }
       });
       
-      console.log('VOX.AI [Firebase Injector]: Firebase initialized and ready');
+      console.log('Survsay [Firebase Injector]: Firebase initialized and ready');
     } catch (error) {
-      console.error('VOX.AI [Firebase Injector]: Initialization failed:', error);
-      window.__voxai_firebase_ready = false;
+      console.error('Survsay [Firebase Injector]: Initialization failed:', error);
+      window.__survsay_firebase_ready = false;
     }
   `;
   document.head.appendChild(script);
-  console.log('VOX.AI [Firebase Injector]: Firebase SDK module injected into page');
+  console.log('Survsay [Firebase Injector]: Firebase SDK module injected into page');
 })();

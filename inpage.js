@@ -1,7 +1,7 @@
 // inpage.js - Handles on-device text-based inference.
 (function () {
-  if (window.__voxai_inpage_installed) return;
-  window.__voxai_inpage_installed = true;
+  if (window.__survsay_inpage_installed) return;
+  window.__survsay_inpage_installed = true;
 
   function respond(channel, payload) {
     try {
@@ -20,7 +20,7 @@
   };
 
   async function ensureSession() {
-    if (window.__voxai_languageModelSession) return window.__voxai_languageModelSession;
+    if (window.__survsay_languageModelSession) return window.__survsay_languageModelSession;
     if (typeof LanguageModel === 'undefined') throw new Error('LanguageModel API not present');
 
     const sessionOptions = {
@@ -30,14 +30,14 @@
       systemPrompt: 'You are a helpful assistant. Always respond in English.',
       ...modelCapabilities
     };
-    window.__voxai_languageModelSession = await LanguageModel.create(sessionOptions);
-    return window.__voxai_languageModelSession;
+    window.__survsay_languageModelSession = await LanguageModel.create(sessionOptions);
+    return window.__survsay_languageModelSession;
   }
 
   window.addEventListener('message', async (ev) => {
-    if (!ev.data || !ev.data.voxai) return;
+    if (!ev.data || !ev.data.survsay) return;
 
-    if (ev.data.voxai === 'CHECK_NANO_ELIGIBILITY') {
+    if (ev.data.survsay === 'CHECK_NANO_ELIGIBILITY') {
       const { channel } = ev.data;
       if (!channel) return;
 
@@ -61,7 +61,7 @@
       return;
     }
 
-    if (ev.data.voxai === 'CHECK_ON_DEVICE') {
+    if (ev.data.survsay === 'CHECK_ON_DEVICE') {
       const { channel } = ev.data;
       if (!channel) return;
 
@@ -97,7 +97,7 @@
       return;
     }
 
-    if (ev.data.voxai === 'PROCESS_AUDIO_INPAGE') {
+    if (ev.data.survsay === 'PROCESS_AUDIO_INPAGE') {
       const { audioBase64, channel } = ev.data;
       if (!channel) return;
 
@@ -133,7 +133,7 @@
       }
     }
 
-    if (ev.data.voxai === 'PROCESS_TEXT_INPAGE') {
+    if (ev.data.survsay === 'PROCESS_TEXT_INPAGE') {
       const { text, schema, context, channel } = ev.data;
       if (!channel) return;
 
