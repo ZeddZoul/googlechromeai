@@ -116,6 +116,16 @@ describe('Survsay Content Script', () => {
         expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
     });
 
+    test('should not attach mics to divs with less than two inputs', () => {
+        document.body.innerHTML = `
+            <div id="div-form">
+                <input type="text" name="name" />
+            </div>
+        `;
+        attachMicsToForms();
+        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(0);
+    });
+
     test('should remove all mics from the page', () => {
         attachMicsToForms();
         removeAllMics();

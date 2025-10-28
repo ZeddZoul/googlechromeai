@@ -67,8 +67,16 @@ function attachMicsToForms() {
         const setPosition = () => {
             const formRect = form.getBoundingClientRect();
             chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
-                const pos = settings.micPosition;
+                let pos = settings.micPosition;
                 el.style.position = 'fixed'; // Use fixed positioning
+
+                // Smarter positioning: if bottom is off-screen, flip to top
+                if (pos.includes('bottom')) {
+                    const buttonBottom = formRect.bottom + el.offsetHeight + 5;
+                    if (buttonBottom > window.innerHeight) {
+                        pos = pos.replace('bottom', 'top');
+                    }
+                }
 
                 if (pos.includes('top')) {
                     el.style.top = `${formRect.top - el.offsetHeight - 5}px`; // 5px above
@@ -216,8 +224,7 @@ function findDivForms() {
     const divForms = [];
     divs.forEach(div => {
         const inputs = div.querySelectorAll('input, textarea, select');
-        const submitButton = div.querySelector('button[type="submit"]');
-        if (inputs.length >= 2 || (inputs.length >= 1 && submitButton)) {
+        if (inputs.length >= 2) {
             // Avoid nesting by checking if the div is inside a form or another div form
             if (!div.closest('form') && !div.closest('.survsay-div-form')) {
                 div.classList.add('survsay-div-form');
