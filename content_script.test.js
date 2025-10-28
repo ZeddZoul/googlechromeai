@@ -66,6 +66,7 @@ const {
     recordingState,
     analyzeForm,
     fillForm,
+    findDivForms,
 } = require('./content_script');
 
 describe('Survsay Content Script', () => {
@@ -99,6 +100,18 @@ describe('Survsay Content Script', () => {
     });
 
     test('should attach mics to all forms', () => {
+        attachMicsToForms();
+        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
+    });
+
+    test('should attach mics to div-based forms', () => {
+        document.body.innerHTML = `
+            <div id="div-form">
+                <input type="text" name="name" />
+                <input type="email" name="email" />
+                <button type="submit">Submit</button>
+            </div>
+        `;
         attachMicsToForms();
         expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
     });

@@ -29,7 +29,10 @@ let recordingState = {
 
 function attachMicsToForms() {
     const forms = document.querySelectorAll('form');
-    forms.forEach((form, index) => {
+    const divForms = findDivForms();
+    const allForms = [...forms, ...divForms];
+
+    allForms.forEach((form, index) => {
         const micId = `survsay-floating-mic-${index}`;
         if (document.getElementById(micId)) return;
 
@@ -89,8 +92,25 @@ function attachMicsToForms() {
         setTimeout(setPosition, 100); // Delay to ensure button is rendered for size calcs
         window.addEventListener('resize', setPosition);
 
-        form.addEventListener('mouseenter', () => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
-        form.addEventListener('mouseleave', () => { if (!el.classList.contains('survsay-recording')) { el.style.opacity = '0'; el.style.transform = 'translateY(5px)'; } });
+        let hideTimeout;
+        const show = () => {
+            clearTimeout(hideTimeout);
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+        };
+        const hide = () => {
+            if (recordingState.isRecording && el.classList.contains('survsay-recording')) return;
+            hideTimeout = setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(5px)';
+            }, 300);
+        };
+
+        form.addEventListener('mouseenter', show);
+        form.addEventListener('mouseleave', hide);
+        el.addEventListener('mouseenter', show);
+        el.addEventListener('mouseleave', hide);
+
         el.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (recordingState.isInitializing || recordingState.isStopping) return;
@@ -189,6 +209,23 @@ function cleanupAudioResources() {
         sourceNode: null, rafId: null, currentStream: null, recognizer: null,
         fallbackTranscript: '', activeForm: null
     });
+}
+
+function findDivForms() {
+    const divs = document.querySelectorAll('div');
+    const divForms = [];
+    divs.forEach(div => {
+        const inputs = div.querySelectorAll('input, textarea, select');
+        const submitButton = div.querySelector('button[type="submit"]');
+        if (inputs.length >= 2 || (inputs.length >= 1 && submitButton)) {
+            // Avoid nesting by checking if the div is inside a form or another div form
+            if (!div.closest('form') && !div.closest('.survsay-div-form')) {
+                div.classList.add('survsay-div-form');
+                divForms.push(div);
+            }
+        }
+    });
+    return divForms;
 }
 
 async function processRecording(blob, fallbackTranscript) {
