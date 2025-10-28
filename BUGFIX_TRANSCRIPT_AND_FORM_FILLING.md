@@ -37,10 +37,10 @@ ReferenceError: firebase is not defined
 **Symptoms:**
 
 ```
-VOX.AI: Speech recognition interim/final: first name is Wisdom...
-VOX.AI: Recording stopped.
-VOX.AI: Processing recording...
-VOX.AI: No transcription available  // ← Empty!
+Survsay: Speech recognition interim/final: first name is Wisdom...
+Survsay: Recording stopped.
+Survsay: Processing recording...
+Survsay: No transcription available  // ← Empty!
 ```
 
 **Root Cause:**
@@ -69,7 +69,7 @@ recordingState.mediaRecorder.onstop = async () => {
   const blob = new Blob(recordingState.chunks, { type: "audio/webm" });
   // Save transcript BEFORE cleanup (cleanup will clear it)
   const savedTranscript = recordingState.fallbackTranscript;
-  console.log("VOX.AI: Saved transcript before cleanup:", savedTranscript);
+  console.log("Survsay: Saved transcript before cleanup:", savedTranscript);
   cleanupAudioResources();
   await processRecording(blob, savedTranscript); // ← Pass as parameter
 };
@@ -129,7 +129,7 @@ recordingState.recognizer.onresult = (ev) => {
   if (transcript.trim()) {
     recordingState.fallbackTranscript = transcript.trim();
     console.log(
-      "VOX.AI: Speech recognition interim/final:",
+      "Survsay: Speech recognition interim/final:",
       recordingState.fallbackTranscript
     );
   }
@@ -145,11 +145,11 @@ recordingState.recognizer.onresult = (ev) => {
 **Symptoms:**
 
 ```
-VOX.AI: Extracted structured data: {firstName: 'John', lastName: 'Smith', ...}
-VOX.AI: Final parsed data: {structured: {...}}
-VOX.AI: Channel matched! Processing response...
-VOX.AI: e.data.payload: undefined
-VOX.AI: Form data extraction failed. Payload: undefined
+Survsay: Extracted structured data: {firstName: 'John', lastName: 'Smith', ...}
+Survsay: Final parsed data: {structured: {...}}
+Survsay: Channel matched! Processing response...
+Survsay: e.data.payload: undefined
+Survsay: Form data extraction failed. Payload: undefined
 ```
 
 **Root Cause:**
@@ -168,11 +168,11 @@ Ignore messages that have a `voxai` property (those are requests, not responses)
 
 ```javascript
 const onInpageResponse = (e) => {
-  console.log("VOX.AI: Received message in onInpageResponse:", e.data);
+  console.log("Survsay: Received message in onInpageResponse:", e.data);
 
   // Ignore messages that are requests (have 'voxai' property)
   if (e.data && e.data.voxai) {
-    console.log("VOX.AI: Ignoring request message with voxai:", e.data.voxai);
+    console.log("Survsay: Ignoring request message with voxai:", e.data.voxai);
     return; // ← Skip request messages
   }
 
@@ -184,7 +184,7 @@ const onInpageResponse = (e) => {
 
   if (e.data.payload && e.data.payload.success) {
     console.log(
-      "VOX.AI: Form data extraction successful:",
+      "Survsay: Form data extraction successful:",
       e.data.payload.result
     );
     fillForm(e.data.payload.result); // ← Now this actually gets called!
@@ -393,19 +393,19 @@ To verify the fixes work:
 
 4. **Check Console Logs:**
    ```
-   VOX.AI: SpeechRecognition started
-   VOX.AI: Speech recognition interim/final: [full transcript]
-   VOX.AI: Recording stopped
-   VOX.AI: Saved transcript before cleanup: [full transcript]
-   VOX.AI: Processing recording...
-   VOX.AI: Final transcription result: [full transcript]
-   VOX.AI: Extracted structured data: {firstName: 'John', ...}
-   VOX.AI: fillForm() called with data: {structured: {...}}
-   VOX.AI: Processing field: firstName = John
-   VOX.AI: Found 1 inputs for name="firstName"
-   VOX.AI: Filled input firstName = John
+   Survsay: SpeechRecognition started
+   Survsay: Speech recognition interim/final: [full transcript]
+   Survsay: Recording stopped
+   Survsay: Saved transcript before cleanup: [full transcript]
+   Survsay: Processing recording...
+   Survsay: Final transcription result: [full transcript]
+   Survsay: Extracted structured data: {firstName: 'John', ...}
+   Survsay: fillForm() called with data: {structured: {...}}
+   Survsay: Processing field: firstName = John
+   Survsay: Found 1 inputs for name="firstName"
+   Survsay: Filled input firstName = John
    [... more fields ...]
-   VOX.AI: Form filling complete. X fields filled.
+   Survsay: Form filling complete. X fields filled.
    ```
 
 ---

@@ -1,4 +1,4 @@
-// VOX.AI - content_script.js
+// Survsay - content_script.js
 
 // --- Helper Functions & State ---
 
@@ -30,43 +30,67 @@ let recordingState = {
 function attachMicsToForms() {
     const forms = document.querySelectorAll('form');
     forms.forEach((form, index) => {
-        const micId = `voxai-floating-mic-${index}`;
+        const micId = `survsay-floating-mic-${index}`;
         if (document.getElementById(micId)) return;
 
-        const el = document.createElement('div');
+        const el = document.createElement('button');
         el.id = micId;
-        el.classList.add('voxai-floating-mic');
+        el.classList.add('survsay-floating-mic');
         el.style.position = 'absolute';
-        el.style.width = '32px';
-        el.style.height = '32px';
-        el.style.borderRadius = '16px';
-        el.style.background = 'rgba(0,0,0,0.1)';
-        el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+        el.style.background = 'white';
+        el.style.color = 'black';
+        el.style.border = '1px solid #7C3AED';
+        el.style.borderRadius = '8px';
+        el.style.padding = '8px 12px';
+        el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
         el.style.display = 'flex';
         el.style.alignItems = 'center';
-        el.style.justifyContent = 'center';
+        el.style.gap = '8px';
         el.style.cursor = 'pointer';
         el.style.zIndex = 2147483646;
+        el.style.fontFamily = 'sans-serif';
+        el.style.fontSize = '14px';
+        el.style.fontWeight = '600';
         el.style.transition = 'all 0.2s ease-in-out';
         el.style.opacity = '0';
-        el.style.transform = 'scale(0.8)';
-        el.title = 'VOX.AI - Click to record for this form';
+        el.style.transform = 'translateY(5px)';
+        el.title = 'Survsay - Click to fill this form with your voice';
 
-        el.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#333"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 5 5 0 0 0 4 4.9V20a1 1 0 1 0 2 0v-4.1A5 5 0 0 0 19 11z" fill="#333" opacity="0.6"/></svg>`;
+        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#7C3AED"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#7C3AED" opacity="0.9"/></svg>`;
+        el.innerHTML = `${micIconSvg}<span>fill this form with survsay</span>`;
 
-        form.style.position = 'relative';
-        form.appendChild(el);
+        document.body.appendChild(el); // Append to body to avoid form layout issues
 
-        chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
-            switch (settings.micPosition) {
-                case 'top-left': el.style.top = '10px'; el.style.left = '10px'; break;
-                case 'center': el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%) scale(0.8)'; break;
-                default: el.style.top = '10px'; el.style.right = '10px'; break;
-            }
-        });
+        const setPosition = () => {
+            const formRect = form.getBoundingClientRect();
+            chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
+                const pos = settings.micPosition;
+                el.style.position = 'fixed'; // Use fixed positioning
 
-        form.addEventListener('mouseenter', () => { el.style.opacity = '1'; el.style.transform = el.style.transform.replace('scale(0.8)', 'scale(1)'); });
-        form.addEventListener('mouseleave', () => { if (!el.classList.contains('voxai-recording')) { el.style.opacity = '0'; el.style.transform = el.style.transform.replace('scale(1)', 'scale(0.8)'); } });
+                if (pos.includes('top')) {
+                    el.style.top = `${formRect.top - el.offsetHeight - 5}px`; // 5px above
+                }
+                if (pos.includes('bottom')) {
+                    el.style.top = `${formRect.bottom + 5}px`; // 5px below
+                }
+                if (pos.includes('left')) {
+                    el.style.left = `${formRect.left}px`;
+                }
+                if (pos.includes('right')) {
+                    el.style.left = `${formRect.right - el.offsetWidth}px`;
+                }
+            });
+        };
+
+        // Store the reposition function on the element for later removal
+        el.__survsay_reposition = setPosition;
+
+        // Set initial position and update on window resize
+        setTimeout(setPosition, 100); // Delay to ensure button is rendered for size calcs
+        window.addEventListener('resize', setPosition);
+
+        form.addEventListener('mouseenter', () => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+        form.addEventListener('mouseleave', () => { if (!el.classList.contains('survsay-recording')) { el.style.opacity = '0'; el.style.transform = 'translateY(5px)'; } });
         el.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (recordingState.isInitializing || recordingState.isStopping) return;
@@ -76,8 +100,11 @@ function attachMicsToForms() {
 }
 
 function removeAllMics() {
-    const mics = document.querySelectorAll('.voxai-floating-mic');
-    mics.forEach(mic => mic.remove());
+    const mics = document.querySelectorAll('.survsay-floating-mic');
+    mics.forEach(mic => {
+        window.removeEventListener('resize', mic.__survsay_reposition);
+        mic.remove();
+    });
 }
 
 async function handleStartRecording(el, form) {
@@ -122,12 +149,15 @@ async function handleStartRecording(el, form) {
             recordingState.recognizer.start();
         }
 
-        startAnalyseLoop();
         recordingState.isRecording = true;
-        el.classList.add('voxai-recording');
-        el.style.background = '#ff6b6b';
+        el.classList.add('survsay-recording');
+        el.style.background = '#6b21a8'; // Darker purple for recording state
+        el.style.color = 'white';
+        el.querySelector('span').textContent = 'Recording...';
+        // Make sure all SVG paths turn white
+        el.querySelectorAll('svg path').forEach(p => p.style.fill = 'white');
     } catch (err) {
-        console.error('VOX.AI: Failed to start recording:', err);
+        console.error('Survsay: Failed to start recording:', err);
         cleanupAudioResources();
     }
     recordingState.isInitializing = false;
@@ -138,8 +168,12 @@ async function handleStopRecording(el) {
     if (recordingState.recognizer) recordingState.recognizer.stop();
     if (recordingState.mediaRecorder && recordingState.mediaRecorder.state !== 'inactive') recordingState.mediaRecorder.stop();
     else cleanupAudioResources();
-    el.classList.remove('voxai-recording');
-    el.style.background = '#FFD700';
+    el.classList.remove('survsay-recording');
+    el.style.background = 'white'; // Back to original white
+    el.style.color = 'black';
+    el.querySelector('span').textContent = 'fill this form with survsay';
+    // And all SVG paths back to purple
+    el.querySelectorAll('svg path').forEach(p => p.style.fill = '#7C3AED');
     recordingState.isStopping = false;
 }
 
@@ -157,28 +191,12 @@ function cleanupAudioResources() {
     });
 }
 
-function startAnalyseLoop() {
-    if (!recordingState.analyser) return;
-    const data = new Uint8Array(recordingState.analyser.fftSize);
-    const el = document.querySelector('.voxai-recording');
-    function draw() {
-        if (!recordingState.analyser) return;
-        recordingState.analyser.getByteTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += Math.pow((data[i] - 128) / 128, 2);
-        const rms = Math.sqrt(sum / data.length);
-        if (el) el.style.transform = `scale(${1 + rms * 0.4})`;
-        recordingState.rafId = requestAnimationFrame(draw);
-    }
-    draw();
-}
-
 async function processRecording(blob, fallbackTranscript) {
-    console.log("VOX.AI: Starting multi-layer transcription process...");
+    console.log("Survsay: Starting multi-layer transcription process...");
 
     // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
-        const channel = `voxai_nano_eligibility_${Math.random().toString(36).slice(2)}`;
+        const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
         const onEligibilityResponse = (e) => {
             if (e.data.channel === channel) {
                 window.removeEventListener('message', onEligibilityResponse);
@@ -190,7 +208,7 @@ async function processRecording(blob, fallbackTranscript) {
             resolve(false);
         }, 1000);
         window.addEventListener('message', onEligibilityResponse);
-        window.postMessage({ voxai: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
+        window.postMessage({ survsay: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
     });
 
     let transcription = null;
@@ -198,10 +216,10 @@ async function processRecording(blob, fallbackTranscript) {
     if (isNanoEligible) {
         // Layer 1: Try Gemini Nano for transcription.
         try {
-            console.log("VOX.AI: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
+            console.log("Survsay: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
             const base64Audio = await blobToBase64(blob);
             const nanoResult = await new Promise((resolve, reject) => {
-                const channel = `voxai_nano_transcribe_${Math.random().toString(36).slice(2)}`;
+                const channel = `survsay_nano_transcribe_${Math.random().toString(36).slice(2)}`;
                 const onNanoResponse = (e) => {
                     if (e.data.channel === channel) {
                         window.removeEventListener('message', onNanoResponse);
@@ -213,28 +231,28 @@ async function processRecording(blob, fallbackTranscript) {
                     }
                 };
                 window.addEventListener('message', onNanoResponse);
-                window.postMessage({ voxai: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
+                window.postMessage({ survsay: 'PROCESS_AUDIO_INPAGE', audioBase64: base64Audio, channel }, '*');
             });
 
             if (nanoResult) {
-                console.log("VOX.AI: Gemini Nano transcription successful (Layer 1).");
+                console.log("Survsay: Gemini Nano transcription successful (Layer 1).");
                 transcription = nanoResult;
             }
         } catch (error) {
-            console.warn("VOX.AI: Gemini Nano transcription failed (Layer 1).", error);
+            console.warn("Survsay: Gemini Nano transcription failed (Layer 1).", error);
         }
     } else {
-        console.log("VOX.AI: Gemini Nano not eligible. Proceeding to Layer 2 (Firebase).");
+        console.log("Survsay: Gemini Nano not eligible. Proceeding to Layer 2 (Firebase).");
     }
 
     // Layer 2: If Nano failed or was ineligible, try Firebase AI.
     if (!transcription) {
         try {
-            console.log("VOX.AI: Attempting transcription with Firebase AI (Layer 2)...");
+            console.log("Survsay: Attempting transcription with Firebase AI (Layer 2)...");
             const base64Audio = await blobToBase64(blob);
             const firebaseResult = await new Promise((resolve, reject) => {
                 const onFirebaseResponse = (e) => {
-                    if (e.data.action === 'VOX_FIREBASE_TRANSCRIPTION_RESULT') {
+                    if (e.data.action === 'SURVSAY_FIREBASE_TRANSCRIPTION_RESULT') {
                         window.removeEventListener('message', onFirebaseResponse);
                         if (e.data.result) {
                             resolve(e.data.result);
@@ -244,21 +262,21 @@ async function processRecording(blob, fallbackTranscript) {
                     }
                 };
                 window.addEventListener('message', onFirebaseResponse);
-                window.postMessage({ action: 'VOX_TRANSCRIBE_AUDIO', audioBase64: base64Audio }, '*');
+                window.postMessage({ action: 'SURVSAY_TRANSCRIBE_AUDIO', audioBase64: base64Audio }, '*');
             });
 
             if (firebaseResult) {
-                console.log("VOX.AI: Firebase AI transcription successful (Layer 2).");
+                console.log("Survsay: Firebase AI transcription successful (Layer 2).");
                 transcription = firebaseResult;
             }
         } catch (error) {
-            console.warn("VOX.AI: Firebase AI transcription failed (Layer 2).", error);
+            console.warn("Survsay: Firebase AI transcription failed (Layer 2).", error);
         }
     }
 
     // Layer 3: If all else fails, use the Web Speech API fallback.
     if (!transcription && fallbackTranscript) {
-        console.log("VOX.AI: Using Web Speech API transcription as fallback (Layer 3).");
+        console.log("Survsay: Using Web Speech API transcription as fallback (Layer 3).");
         transcription = fallbackTranscript;
     }
 
@@ -266,13 +284,13 @@ async function processRecording(blob, fallbackTranscript) {
     if (transcription) {
         await processTextWithAI(transcription, isNanoEligible);
     } else {
-        console.error("VOX.AI: All transcription layers failed.");
+        console.error("Survsay: All transcription layers failed.");
     }
 }
 
 async function processTextWithAI(transcription, isNanoEligible) {
     if (!transcription) {
-        console.warn("VOX.AI: Cannot process empty transcription.");
+        console.warn("Survsay: Cannot process empty transcription.");
         return;
     }
 
@@ -281,10 +299,10 @@ async function processTextWithAI(transcription, isNanoEligible) {
 
     if (isNanoEligible) {
         // Layer 1: Use Gemini Nano for text extraction.
-        console.log("VOX.AI: Processing text with Gemini Nano (Layer 1)...");
+        console.log("Survsay: Processing text with Gemini Nano (Layer 1)...");
         try {
             const nanoResult = await new Promise((resolve, reject) => {
-                const channel = `voxai_resp_${Math.random().toString(36).slice(2)}`;
+                const channel = `survsay_resp_${Math.random().toString(36).slice(2)}`;
                 const onInpageResponse = (e) => {
                     if (e.data.channel !== channel || !e.data.payload) return;
                     window.removeEventListener('message', onInpageResponse);
@@ -295,16 +313,16 @@ async function processTextWithAI(transcription, isNanoEligible) {
                     }
                 };
                 window.addEventListener('message', onInpageResponse);
-                window.postMessage({ voxai: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
+                window.postMessage({ survsay: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
             });
             fillForm(nanoResult, recordingState.activeForm);
         } catch (error) {
-            console.warn("VOX.AI: Nano text processing failed (Layer 1). Now attempting Firebase fallback (Layer 2).", error);
+            console.warn("Survsay: Nano text processing failed (Layer 1). Now attempting Firebase fallback (Layer 2).", error);
             await processTextWithFirebase(transcription, schema, context);
         }
     } else {
         // Layer 2: Use Firebase for text extraction.
-        console.log("VOX.AI: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
+        console.log("Survsay: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
         await processTextWithFirebase(transcription, schema, context);
     }
 }
@@ -313,7 +331,7 @@ async function processTextWithFirebase(transcription, schema, context) {
     try {
         const firebaseResult = await new Promise((resolve, reject) => {
             const onFirebaseResponse = (e) => {
-                if (e.data.action === 'VOX_FIREBASE_EXTRACTION_RESULT') {
+                if (e.data.action === 'SURVSAY_FIREBASE_EXTRACTION_RESULT') {
                     window.removeEventListener('message', onFirebaseResponse);
                     if (e.data.result) {
                         resolve(e.data.result);
@@ -323,11 +341,11 @@ async function processTextWithFirebase(transcription, schema, context) {
                 }
             };
             window.addEventListener('message', onFirebaseResponse);
-            window.postMessage({ action: 'VOX_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
+            window.postMessage({ action: 'SURVSAY_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
         });
         fillForm(firebaseResult, recordingState.activeForm);
     } catch (error) {
-        console.error("VOX.AI: Firebase text processing failed (Layer 2).", error);
+        console.error("Survsay: Firebase text processing failed (Layer 2).", error);
     }
 }
 
@@ -388,11 +406,28 @@ function getSurroundingText(form) {
 
 // --- Main Execution ---
 
-function main() {
-    if (window.__voxai_installed) return;
-    window.__voxai_installed = true;
+function injectAnimationStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes survsay-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(124, 58, 237, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+        }
+        .survsay-recording {
+            animation: survsay-pulse 2s infinite;
+        }
+    `;
+    document.head.appendChild(style);
+}
 
-    // Inject inpage.js
+function main() {
+    if (window.__survsay_installed) return;
+    window.__survsay_installed = true;
+
+    injectAnimationStyles();
+
+    // Inject inpage.js for Nano communication
     (function injectInpage() {
         try {
             const src = chrome.runtime.getURL('inpage.js');
@@ -401,7 +436,7 @@ function main() {
             s.type = 'text/javascript';
             (document.head || document.documentElement).appendChild(s);
             s.onload = () => s.remove();
-        } catch (err) { console.warn('VOX.AI: failed to inject inpage', err); }
+        } catch (err) { console.warn('Survsay: failed to inject inpage.js', err); }
     })();
 
     function init() {
@@ -421,9 +456,10 @@ function main() {
 }
 
 if (typeof process === 'undefined' || process.env.NODE_ENV !== 'test') {
+    // Inject Firebase injector for cloud AI capabilities
     (function() {
-        if (!window.__voxai_firebase_injected) {
-            window.__voxai_firebase_injected = true;
+        if (!window.__survsay_firebase_injected) {
+            window.__survsay_firebase_injected = true;
             const script = document.createElement('script');
             script.src = chrome.runtime.getURL('firebase-injector.js');
             document.head.appendChild(script);

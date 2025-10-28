@@ -1,14 +1,14 @@
-// VOX.AI - service_worker.js
+// Survsay - service_worker.js
 // Minimal background/service worker. No AI processing is done here; AI runs
 // in the page context via the injected inpage.js.
 
 self.addEventListener('install', (e) => {
-  console.log('VOX.AI service worker installed');
+  console.log('Survsay service worker installed');
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
-  console.log('VOX.AI service worker activated');
+  console.log('Survsay service worker activated');
   self.clients.claim();
 });
 

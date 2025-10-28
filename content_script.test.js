@@ -68,7 +68,7 @@ const {
     fillForm,
 } = require('./content_script');
 
-describe('VOX.AI Content Script', () => {
+describe('Survsay Content Script', () => {
     beforeEach(() => {
         document.body.innerHTML = `
             <div>Some text before the form</div>
@@ -100,13 +100,13 @@ describe('VOX.AI Content Script', () => {
 
     test('should attach mics to all forms', () => {
         attachMicsToForms();
-        expect(document.querySelectorAll('.voxai-floating-mic').length).toBe(1);
+        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
     });
 
     test('should remove all mics from the page', () => {
         attachMicsToForms();
         removeAllMics();
-        expect(document.querySelectorAll('.voxai-floating-mic').length).toBe(0);
+        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(0);
     });
 
     describe('getSurroundingText', () => {
@@ -129,12 +129,17 @@ describe('VOX.AI Content Script', () => {
 
     test('should handle start and stop recording', async () => {
         const form = document.getElementById('form1');
-        const mic = document.createElement('div');
+        const mic = document.createElement('button');
+        mic.innerHTML = '<span>fill this form with survsay</span>'; // Add span for text check
+
         await handleStartRecording(mic, form);
-        expect(mic.classList.contains('voxai-recording')).toBe(true);
+        expect(mic.classList.contains('survsay-recording')).toBe(true);
+        expect(mic.querySelector('span').textContent).toBe('Recording...');
         expect(recordingState.activeForm).toBe(form);
+
         await handleStopRecording(mic);
-        expect(mic.classList.contains('voxai-recording')).toBe(false);
+        expect(mic.classList.contains('survsay-recording')).toBe(false);
+        expect(mic.querySelector('span').textContent).toBe('fill this form with survsay');
     });
 
     test('should analyze a form and return a schema', () => {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vox AI Settings</title>
+    <title>Survsay Settings</title>
     <link rel="stylesheet" href="util.css" />
     <style>
         body {
@@ -24,13 +24,13 @@
             width: 48px;
             height: 48px;
             border-radius: 12px;
-            background: #FFD700;
+            background: #7C3AED;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
             font-size: 16px;
-            color: #222;
+            color: #fff;
         }
         .title-group {
             line-height: 1.2;
@@ -106,7 +106,7 @@
             border-radius: 50%;
         }
         input:checked + .slider {
-            background-color: #4CAF50;
+            background-color: #7C3AED;
         }
         input:checked + .slider:before {
             transform: translateX(20px);
@@ -126,9 +126,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">V</div>
+            <div class="logo">S</div>
             <div class="title-group">
-                <div class="title">VOX.AI Settings</div>
+                <div class="title">Survsay Settings</div>
                 <div class="subtitle">Configure your experience</div>
             </div>
         </div>
@@ -146,7 +146,8 @@
                 <select id="mic-position">
                     <option value="top-right">Top Right</option>
                     <option value="top-left">Top Left</option>
-                    <option value="center">Center</option>
+                    <option value="bottom-right">Bottom Right</option>
+                    <option value="bottom-left">Bottom Left</option>
                 </select>
             </div>
             <div class="setting">

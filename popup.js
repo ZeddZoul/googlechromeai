@@ -1,4 +1,4 @@
-// popup.js - Settings management for VOX.AI
+// popup.js - Settings management for Survsay
 document.addEventListener('DOMContentLoaded', () => {
     const micToggle = document.getElementById('floating-mic-toggle');
     const micPosition = document.getElementById('mic-position');
@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
             language: languageSelect.value
         };
         chrome.storage.sync.set(settings, () => {
-            console.log('VOX.AI: Settings saved.');
+            console.log('Survsay: Settings saved.');
             // Notify content scripts of the changes
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs[0]) {
@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetSettings() {
         chrome.storage.sync.set(DEFAULTS, () => {
             loadSettings();
-            console.log('VOX.AI: Settings reset to defaults.');
+            console.log('Survsay: Settings reset to defaults.');
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs[0]) {
                     chrome.tabs.sendMessage(tabs[0].id, { type: 'SETTINGS_UPDATED', settings: DEFAULTS });

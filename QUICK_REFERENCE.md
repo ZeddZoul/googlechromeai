@@ -1,4 +1,4 @@
-# VOX.AI - Quick Reference Card
+# Survsay - Quick Reference Card
 
 ## Installation & Setup
 
@@ -70,7 +70,7 @@ fillForm(data)                         // Fill form
 
 ### Test Transcription
 ```javascript
-// In browser console on any page with VOX.AI:
+// In browser console on any page with Survsay:
 const testBlob = new Blob(['test'], { type: 'audio/webm' });
 transcribeWithFirebase(testBlob).then(result => console.log(result));
 ```
@@ -85,7 +85,7 @@ extractFormDataWithFirebase(text, schema).then(result => console.log(result));
 
 ### Debug Console Logs
 - Open DevTools (F12)
-- Filter console for "VOX.AI"
+- Filter console for "Survsay"
 - See detailed layer-by-layer progress
 
 ## Troubleshooting
@@ -159,7 +159,7 @@ See `FEATURES.md` for full roadmap.
 ## One-Liners
 
 - **Load extension:** `Settings → Extensions → Load unpacked → googlechromeai`
-- **Debug:** Open DevTools (F12), filter for "VOX.AI"
+- **Debug:** Open DevTools (F12), filter for "Survsay"
 - **Check Firebase:** Verify `firebase-config.js` has your credentials
 - **Test:** Use VU meter visualization to see if audio is being captured
 - **Improve:** Check console logs to see which fallback layer is being used
@@ -176,4 +176,4 @@ See `FEATURES.md` for full roadmap.
 
 ---
 
-**You're all set! Enjoy VOX.AI! 🚀**
+**You're all set! Enjoy Survsay! 🚀**
