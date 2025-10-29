@@ -67,8 +67,18 @@ function attachMicsToForms() {
         const setPosition = () => {
             const formRect = form.getBoundingClientRect();
             chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
+                const isTallForm = formRect.height >= window.innerHeight * 0.9;
+                el.style.position = 'fixed';
+
+                if (isTallForm) {
+                    // Special case for tall forms: position button inside at top-right.
+                    el.style.top = `${formRect.top + 10}px`; // 10px from form's top
+                    el.style.left = `${formRect.right - el.offsetWidth - 10}px`; // 10px from form's right
+                    return;
+                }
+
+                // --- Default positioning for non-tall forms ---
                 let pos = settings.micPosition;
-                el.style.position = 'fixed'; // Use fixed positioning
 
                 // Smarter positioning: if bottom is off-screen, flip to top
                 if (pos.includes('bottom')) {
@@ -220,18 +230,26 @@ function cleanupAudioResources() {
 }
 
 function findDivForms() {
-    const divs = document.querySelectorAll('div');
-    const divForms = [];
-    divs.forEach(div => {
+    const candidateDivs = [];
+    document.querySelectorAll('div').forEach(div => {
+        // A div is a candidate if it's not inside a real form and doesn't contain one.
+        if (div.closest('form') || div.querySelector('form')) {
+            return;
+        }
         const inputs = div.querySelectorAll('input, textarea, select');
         if (inputs.length >= 2) {
-            // Avoid nesting by checking if the div is inside a form or another div form
-            if (!div.closest('form') && !div.closest('.survsay-div-form')) {
-                div.classList.add('survsay-div-form');
-                divForms.push(div);
-            }
+            candidateDivs.push(div);
         }
     });
+
+    // Filter out candidates that are nested inside other candidates.
+    // This ensures we only attach a mic to the outermost "form-like" div.
+    const divForms = candidateDivs.filter(d1 => {
+        return !candidateDivs.some(d2 => d1 !== d2 && d2.contains(d1));
+    });
+
+    divForms.forEach(div => div.classList.add('survsay-div-form'));
+
     return divForms;
 }
 
