@@ -179,9 +179,9 @@ async function handleStartRecording(el, form) {
 
         recordingState.isRecording = true;
         el.classList.add('survsay-recording');
-        el.style.background = '#6b21a8'; // Darker purple for recording state
+        el.style.background = '#DC2626'; // Red background for recording
         el.style.color = 'white';
-        el.querySelector('span').textContent = 'Recording...';
+        el.querySelector('span').textContent = 'stop recording';
         // Make sure all SVG paths turn white
         el.querySelectorAll('svg path').forEach(p => p.style.fill = 'white');
     } catch (err) {
@@ -489,10 +489,12 @@ function main() {
         });
     }
 
-    chrome.runtime.onMessage.addListener((msg) => {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.type === 'SETTINGS_UPDATED') {
             removeAllMics();
             if (msg.settings.micEnabled) attachMicsToForms();
+        } else if (msg.type === 'PING') {
+            sendResponse({ ok: true });
         }
     });
 

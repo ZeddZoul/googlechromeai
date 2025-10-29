@@ -57,6 +57,20 @@ document.addEventListener('DOMContentLoaded', () => {
     languageSelect.addEventListener('change', saveSettings);
     resetButton.addEventListener('click', resetSettings);
 
-    // Initial load
-    loadSettings();
+    // Check for content script availability (CSP check)
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, { type: 'PING' }, (response) => {
+                if (chrome.runtime.lastError || !response || !response.ok) {
+                    // Content script is not available or didn't respond
+                    document.querySelector('.settings-group').style.display = 'none';
+                    document.querySelector('.footer').style.display = 'none';
+                    document.getElementById('csp-warning').style.display = 'block';
+                } else {
+                    // Content script is available, load settings
+                    loadSettings();
+                }
+            });
+        }
+    });
 });

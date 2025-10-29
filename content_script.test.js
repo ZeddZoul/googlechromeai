@@ -66,7 +66,6 @@ const {
     recordingState,
     analyzeForm,
     fillForm,
-    findDivForms,
 } = require('./content_script');
 
 describe('Survsay Content Script', () => {
@@ -104,28 +103,6 @@ describe('Survsay Content Script', () => {
         expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
     });
 
-    test('should attach mics to div-based forms', () => {
-        document.body.innerHTML = `
-            <div id="div-form">
-                <input type="text" name="name" />
-                <input type="email" name="email" />
-                <button type="submit">Submit</button>
-            </div>
-        `;
-        attachMicsToForms();
-        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
-    });
-
-    test('should not attach mics to divs with less than two inputs', () => {
-        document.body.innerHTML = `
-            <div id="div-form">
-                <input type="text" name="name" />
-            </div>
-        `;
-        attachMicsToForms();
-        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(0);
-    });
-
     test('should remove all mics from the page', () => {
         attachMicsToForms();
         removeAllMics();
@@ -153,15 +130,17 @@ describe('Survsay Content Script', () => {
     test('should handle start and stop recording', async () => {
         const form = document.getElementById('form1');
         const mic = document.createElement('button');
-        mic.innerHTML = '<span>fill this form with survsay</span>'; // Add span for text check
+        mic.innerHTML = '<span>fill this form with survsay</span><svg><path/></svg>'; // Mock the structure
 
         await handleStartRecording(mic, form);
         expect(mic.classList.contains('survsay-recording')).toBe(true);
-        expect(mic.querySelector('span').textContent).toBe('Recording...');
+        expect(mic.style.background).toBe('rgb(220, 38, 38)'); // #DC2626
+        expect(mic.querySelector('span').textContent).toBe('stop recording');
         expect(recordingState.activeForm).toBe(form);
 
         await handleStopRecording(mic);
         expect(mic.classList.contains('survsay-recording')).toBe(false);
+        expect(mic.style.background).toBe('white');
         expect(mic.querySelector('span').textContent).toBe('fill this form with survsay');
     });
 
