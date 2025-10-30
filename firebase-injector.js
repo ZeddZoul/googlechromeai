@@ -120,10 +120,18 @@
         
         if (event.data.action === 'SURVSAY_REWRITE_TEXT_FIREBASE') {
             try {
-                const { text, tone, channel } = event.data;
-                console.log('Survsay [Firebase Injector]: Received rewrite request with tone \'' + tone + '\'');
+                const { text, tone, length, channel } = event.data;
+                console.log('Survsay [Firebase Injector]: Received rewrite request with tone \'' + tone + '\' and length \'' + length + '\'');
+
+                let lengthInstruction = '';
+                if (length === 'shorter') {
+                    lengthInstruction = ' Make the text shorter.';
+                } else if (length === 'longer') {
+                    lengthInstruction = ' Make the text longer.';
+                }
 
                 const prompt = 'Rewrite the following text in a ' + tone + ' tone.' +
+                             lengthInstruction +
                              ' Return only the rewritten text, and nothing else.' +
                              '\n\nText: "' + text + '"';
 

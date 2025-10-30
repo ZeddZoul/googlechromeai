@@ -578,7 +578,10 @@ async function handleRewrite(field, button) {
     button.style.transform = 'rotate(360deg)';
     button.style.transition = 'transform 0.5s';
 
-    const { rewriteTone } = await new Promise(resolve => chrome.storage.sync.get({ rewriteTone: 'professional' }, resolve));
+    const settings = await new Promise(resolve => {
+        chrome.storage.sync.get({ rewriteTone: 'original', rewriteLength: 'original' }, resolve);
+    });
+    const { rewriteTone, rewriteLength } = settings;
 
     const isNanoEligible = await new Promise((resolve) => {
         const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
@@ -613,7 +616,7 @@ async function handleRewrite(field, button) {
                     }
                 };
                 window.addEventListener('message', onRewriteResponse);
-                window.postMessage({ survsay: 'REWRITE_TEXT', text, tone: rewriteTone, channel }, '*');
+                window.postMessage({ survsay: 'REWRITE_TEXT', text, tone: rewriteTone, length: rewriteLength, channel }, '*');
             });
         } catch (error) {
             console.warn("Survsay: Nano rewrite failed. Falling back to Firebase.", error);
@@ -635,7 +638,7 @@ async function handleRewrite(field, button) {
                     }
                 };
                 window.addEventListener('message', onFirebaseResponse);
-                window.postMessage({ action: 'SURVSAY_REWRITE_TEXT_FIREBASE', text, tone: rewriteTone, channel }, '*');
+                window.postMessage({ action: 'SURVSAY_REWRITE_TEXT_FIREBASE', text, tone: rewriteTone, length: rewriteLength, channel }, '*');
             });
         } catch (error) {
             console.error("Survsay: Firebase rewrite failed.", error);

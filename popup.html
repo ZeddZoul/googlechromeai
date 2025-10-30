@@ -51,6 +51,15 @@
             margin-bottom: 16px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
+        .subsection-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #9CA3AF;
+            text-transform: uppercase;
+            padding: 12px 0 4px;
+            border-bottom: 1px solid #f0f0f0;
+            margin-bottom: 4px;
+        }
         .setting {
             display: flex;
             justify-content: space-between;
@@ -65,7 +74,36 @@
             font-size: 15px;
             color: #333;
         }
-        select, button {
+        .custom-select-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding: 8px 30px 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background-color: #fdfdfd;
+            font-size: 14px;
+            cursor: pointer;
+            width: 150px;
+        }
+        .custom-select-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid #777;
+            pointer-events: none;
+        }
+        button {
             padding: 8px 12px;
             border-radius: 8px;
             border: 1px solid #ddd;
@@ -143,30 +181,51 @@
             </div>
             <div class="setting">
                 <label for="mic-position">Mic Position</label>
-                <select id="mic-position">
-                    <option value="top-right">Top Right</option>
-                    <option value="top-left">Top Left</option>
-                    <option value="bottom-right">Bottom Right</option>
-                    <option value="bottom-left">Bottom Left</option>
-                </select>
-            </div>
-            <div class="setting">
-                <label for="rewrite-tone">Rewrite Tone</label>
-                <select id="rewrite-tone">
-                    <option value="professional">Professional</option>
-                    <option value="casual">Casual</option>
-                    <option value="friendly">Friendly</option>
-                    <option value="confident">Confident</option>
-                    <option value="direct">Direct</option>
-                </select>
+                <div class="custom-select-wrapper">
+                    <select id="mic-position">
+                        <option value="top-right">Top Right</option>
+                        <option value="top-left">Top Left</option>
+                        <option value="bottom-right">Bottom Right</option>
+                        <option value="bottom-left">Bottom Left</option>
+                    </select>
+                </div>
             </div>
             <div class="setting">
                 <label for="transcription-language">Language</label>
-                <select id="transcription-language">
-                    <option value="en-US">English (US)</option>
-                    <option value="en-GB">English (UK)</option>
-                    <option value="es-ES">Spanish</option>
-                </select>
+                <div class="custom-select-wrapper">
+                    <select id="transcription-language">
+                        <option value="en-US">English (US)</option>
+                        <option value="en-GB">English (UK)</option>
+                        <option value="es-ES">Spanish</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <div class="subsection-title">Rewriter Settings</div>
+            <div class="setting">
+                <label for="rewrite-tone">Tone</label>
+                <div class="custom-select-wrapper">
+                    <select id="rewrite-tone">
+                        <option value="original">Original</option>
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual</option>
+                        <option value="friendly">Friendly</option>
+                        <option value="confident">Confident</option>
+                        <option value="direct">Direct</option>
+                    </select>
+                </div>
+            </div>
+            <div class="setting">
+                <label for="rewrite-length">Length</label>
+                <div class="custom-select-wrapper">
+                    <select id="rewrite-length">
+                        <option value="original">Keep Original</option>
+                        <option value="shorter">Make Shorter</option>
+                        <option value="longer">Make Longer</option>
+                    </select>
+                </div>
             </div>
         </div>
 

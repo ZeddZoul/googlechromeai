@@ -191,14 +191,23 @@
     }
 
     if (ev.data.survsay === 'REWRITE_TEXT') {
-        const { text, tone, channel } = ev.data;
+        const { text, tone, length, channel } = ev.data;
         if (!channel) return;
 
-        console.log(`Survsay: Rewriting text with tone '${tone}':`, text.substring(0, 50) + '...');
+        console.log(`Survsay: Rewriting text with tone '${tone}' and length '${length}':`, text.substring(0, 50) + '...');
 
         try {
             const session = await ensureSession();
+
+            let lengthInstruction = '';
+            if (length === 'shorter') {
+                lengthInstruction = ' Make the text shorter.';
+            } else if (length === 'longer') {
+                lengthInstruction = ' Make the text longer.';
+            }
+
             const prompt = 'Rewrite the following text in a ' + tone + ' tone.' +
+                         lengthInstruction +
                          ' Return only the rewritten text, and nothing else.' +
                          '\n\nText: "' + text + '"';
 

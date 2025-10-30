@@ -4,13 +4,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const micPosition = document.getElementById('mic-position');
     const languageSelect = document.getElementById('transcription-language');
     const rewriteTone = document.getElementById('rewrite-tone');
+    const rewriteLength = document.getElementById('rewrite-length');
     const resetButton = document.getElementById('reset-settings');
 
     const DEFAULTS = {
         micEnabled: true,
         micPosition: 'top-right',
         language: 'en-US',
-        rewriteTone: 'professional'
+        rewriteTone: 'original',
+        rewriteLength: 'original'
     };
 
     // Load settings from storage and update the UI
@@ -20,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
             micPosition.value = settings.micPosition;
             languageSelect.value = settings.language;
             rewriteTone.value = settings.rewriteTone;
+            rewriteLength.value = settings.rewriteLength;
         });
     }
 
@@ -29,7 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
             micEnabled: micToggle.checked,
             micPosition: micPosition.value,
             language: languageSelect.value,
-            rewriteTone: rewriteTone.value
+            rewriteTone: rewriteTone.value,
+            rewriteLength: rewriteLength.value
         };
         chrome.storage.sync.set(settings, () => {
             console.log('Survsay: Settings saved.');
@@ -60,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     micPosition.addEventListener('change', saveSettings);
     languageSelect.addEventListener('change', saveSettings);
     rewriteTone.addEventListener('change', saveSettings);
+    rewriteLength.addEventListener('change', saveSettings);
     resetButton.addEventListener('click', resetSettings);
 
     // Listen for CSP block messages from the content script
