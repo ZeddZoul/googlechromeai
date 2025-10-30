@@ -1,6 +1,6 @@
 // firebase-injector.js - Injects Firebase SDK with Gemini Developer API into page context
 
-(function() {
+(function () {
   let firebaseReady = false;
   let firebaseModel = null;
 
@@ -128,11 +128,35 @@
       });
       
       console.log('Survsay [Firebase Injector]: Firebase initialized and ready');
+      
+      // ✅ Send postMessage to notify content script (crosses isolated world boundary)
+      window.postMessage({
+        action: 'SURVSAY_FIREBASE_READY',
+        ready: true
+      }, '*');
+      console.log('Survsay [Firebase Injector]: Ready postMessage sent to content script');
+      
+      // ✅ Dispatch custom event to signal completion (works across module boundary)
+      window.dispatchEvent(new CustomEvent('survsay-firebase-ready'));
+      console.log('Survsay [Firebase Injector]: Ready event dispatched');
+      
     } catch (error) {
       console.error('Survsay [Firebase Injector]: Initialization failed:', error);
       window.__survsay_firebase_ready = false;
+      window.dispatchEvent(new CustomEvent('survsay-firebase-failed'));
     }
   `;
   document.head.appendChild(script);
   console.log('Survsay [Firebase Injector]: Firebase SDK module injected into page');
+
+  // Listen for the ready event and set the flag in the outer scope
+  window.addEventListener('survsay-firebase-ready', () => {
+    window.__survsay_firebase_injector_complete = true;
+    console.log('Survsay [Firebase Injector]: Completion flag set in main window scope');
+  }, { once: true });
+
+  window.addEventListener('survsay-firebase-failed', () => {
+    window.__survsay_firebase_injector_complete = false;
+    console.log('Survsay [Firebase Injector]: Failed flag set in main window scope');
+  }, { once: true });
 })();
