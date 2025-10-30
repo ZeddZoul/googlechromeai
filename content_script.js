@@ -32,14 +32,27 @@ function init() {
         chrome.storage.sync.get({ micEnabled: true }, (settings) => {
             if (settings.micEnabled) {
                 attachMicsToForms();
+
+                // Listen for Firebase ready signal via postMessage
+                let firebaseReady = false;
+                const onFirebaseReadyMessage = (event) => {
+                    if (event.data && event.data.action === 'SURVSAY_FIREBASE_READY') {
+                        console.log('Survsay: Firebase injector confirmed ready via postMessage');
+                        firebaseReady = true;
+                        window.removeEventListener('message', onFirebaseReadyMessage);
+                    }
+                };
+                window.addEventListener('message', onFirebaseReadyMessage);
+
                 setTimeout(() => {
-                    if (!window.__survsay_firebase_injector_complete) {
+                    window.removeEventListener('message', onFirebaseReadyMessage);
+                    if (!firebaseReady) {
                         console.warn('Survsay: Firebase injector failed to load, likely due to CSP. Disabling mics.');
                         removeAllMics();
                         chrome.runtime.sendMessage({ type: 'CSP_BLOCKED' });
                     }
                     resolve();
-                }, 500);
+                }, 5000);
             } else {
                 resolve();
             }
@@ -544,15 +557,21 @@ function main() {
 
 if (typeof process === 'undefined' || process.env.NODE_ENV !== 'test') {
     // Inject Firebase injector for cloud AI capabilities
-    (function() {
+    (function () {
         if (!window.__survsay_firebase_injected) {
             window.__survsay_firebase_injected = true;
             const script = document.createElement('script');
             script.src = chrome.runtime.getURL('firebase-injector.js');
+            script.onload = () => {
+                console.log('Survsay: Firebase injector script loaded, starting init with CSP check');
+            };
             document.head.appendChild(script);
         }
     })();
-    main();
+    // Start main() after giving firebase-injector a chance to load
+    setTimeout(() => {
+        main();
+    }, 100); // Small delay to ensure firebase-injector starts loading first
 }
 
 // --- Exports for Testing ---
