@@ -120,7 +120,7 @@
         
         if (event.data.action === 'SURVSAY_REWRITE_TEXT_FIREBASE') {
             try {
-                const { text, tone, length, channel } = event.data;
+            const { text, tone, length, context, channel } = event.data;
                 console.log(\`Survsay [Firebase Injector]: Received rewrite request with tone '\${tone}' and length '\${length}'\`);
 
                 let lengthInstruction = '';
@@ -130,7 +130,12 @@
                     lengthInstruction = ' Make the text longer.';
                 }
 
-                const prompt = \`Rewrite the following text in a \${tone} tone.\${lengthInstruction} Return only the rewritten text, and nothing else.
+            let contextHint = '';
+            if (context && context.instructions) {
+              contextHint = ' IMPORTANT: ' + context.instructions;
+            }
+
+            const prompt = \`Rewrite the following text in a \${tone} tone.\${lengthInstruction}\${contextHint} Return only the rewritten text, and nothing else.
 
 Text: "\${text}"\`;
 

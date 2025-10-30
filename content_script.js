@@ -31,20 +31,24 @@ let recordingState = {
 const SURVSAY_PALETTE = ['#696FC7', '#A7AAE1', '#F5D3C4', '#F2AEBB'];
 
 function ensureBusyUI() {
-    if (document.getElementById('survsay-busy')) return;
+    return new Promise((resolve) => {
+        if (document.getElementById('survsay-busy')) {
+            resolve();
+            return;
+        }
 
-    // Get position from settings
-    chrome.storage.sync.get({ busyPosition: 'top-right' }, (settings) => {
-        const pos = settings.busyPosition || 'top-right';
-        let positionStyles = '';
-        if (pos === 'top-right') positionStyles = 'top:16px;right:16px;';
-        else if (pos === 'top-left') positionStyles = 'top:16px;left:16px;';
-        else if (pos === 'bottom-right') positionStyles = 'bottom:16px;right:16px;';
-        else if (pos === 'bottom-left') positionStyles = 'bottom:16px;left:16px;';
+        // Get position from settings
+        chrome.storage.sync.get({ busyPosition: 'top-right' }, (settings) => {
+            const pos = settings.busyPosition || 'top-right';
+            let positionStyles = '';
+            if (pos === 'top-right') positionStyles = 'top:16px;right:16px;';
+            else if (pos === 'top-left') positionStyles = 'top:16px;left:16px;';
+            else if (pos === 'bottom-right') positionStyles = 'bottom:16px;right:16px;';
+            else if (pos === 'bottom-left') positionStyles = 'bottom:16px;left:16px;';
 
-        const style = document.createElement('style');
-        style.id = 'survsay-busy-style';
-        style.textContent = `
+            const style = document.createElement('style');
+            style.id = 'survsay-busy-style';
+            style.textContent = `
             .survsay-hidden{display:none !important}
             #survsay-busy{position:fixed;${positionStyles}z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;background:rgba(255,255,255,0.9);backdrop-filter:saturate(120%) blur(6px);border:1px solid #e8e7f5;box-shadow:0 10px 25px rgba(0,0,0,.08)}
             #survsay-busy .spinner{width:22px;height:22px;border-radius:50%;position:relative;overflow:hidden;animation:survsay-rotate 1.1s linear infinite}
@@ -56,27 +60,29 @@ function ensureBusyUI() {
             @keyframes survsay-rotate{to{transform:rotate(360deg)}}
             @keyframes survsay-indet{0%{margin-left:-40%}50%{margin-left:60%}100%{margin-left:120%}}
         `;
-        document.head.appendChild(style);
+            document.head.appendChild(style);
 
-        const box = document.createElement('div');
-        box.id = 'survsay-busy';
-        box.className = 'survsay-hidden';
-        box.innerHTML = `
+            const box = document.createElement('div');
+            box.id = 'survsay-busy';
+            box.className = 'survsay-hidden';
+            box.innerHTML = `
             <div class="spinner"><div class="dot"></div></div>
             <div style="display:flex;flex-direction:column;gap:2px;min-width:160px">
-                <div class="label">Survsay is working…</div>
+                <div class="label">Survsay is filling your form…</div>
                 <div class="progress"><div class="bar"></div></div>
             </div>
         `;
-        document.body.appendChild(box);
+            document.body.appendChild(box);
+            resolve();
+        });
     });
 }
 
-function showBusy(message) {
-    ensureBusyUI();
+async function showBusy(message) {
+    await ensureBusyUI();
     const box = document.getElementById('survsay-busy');
     const label = box.querySelector('.label');
-    label.textContent = message || 'Survsay is busy…';
+    label.textContent = message || 'Survsay is filling your form…';
     box.classList.remove('survsay-hidden');
 }
 
@@ -148,10 +154,18 @@ function attachMicsToForms() {
         el.style.transition = 'all 0.2s ease-in-out';
         el.style.opacity = '0';
         el.style.transform = 'translateY(5px)';
-        el.title = 'Survsay - Click to fill this form with your voice';
 
-        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#696FC7"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#696FC7" opacity="0.9"/></svg>`;
-        el.innerHTML = `${micIconSvg}<span>fill this form with survsay</span>`;
+        // Detect if this form behaves like a search bar
+        const isSearchForm = (
+            form.matches('[role="search"]') ||
+            form.closest('[role="search"]') ||
+            !!form.querySelector('input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i], input[name="q" i], input[name*="search" i]')
+        );
+        el.dataset.survsayContext = isSearchForm ? 'search' : 'form';
+        el.title = isSearchForm ? 'Search with Survsay' : 'Fill this form with Survsay';
+
+        const logoImg = `<img src="${chrome.runtime.getURL('logo.PNG')}" alt="Survsay" style="width:14px;height:14px;object-fit:contain;border-radius:3px;" />`;
+        el.innerHTML = `${logoImg}`;
 
         document.body.appendChild(el); // Append to body to avoid form layout issues
 
@@ -289,9 +303,9 @@ async function handleStartRecording(el, form) {
         el.classList.add('survsay-recording-pulse');
         el.style.background = '#DC2626'; // Red background for recording
         el.style.color = 'white';
-        el.querySelector('span').textContent = 'stop recording';
-        // Make sure all SVG paths turn white
-        el.querySelectorAll('svg path').forEach(p => p.style.fill = 'white');
+        // Update title to reflect stop action
+        el.title = 'Survsay - Click to stop recording';
+        // Visual cue handled via background color; logo remains unchanged
     } catch (err) {
         console.error('Survsay: Failed to start recording:', err);
         cleanupAudioResources();
@@ -308,9 +322,11 @@ async function handleStopRecording(el) {
     el.classList.remove('survsay-recording-pulse');
     el.style.background = 'white'; // Back to original white
     el.style.color = 'black';
-    el.querySelector('span').textContent = 'fill this form with survsay';
-    // And all SVG paths back to purple
-    el.querySelectorAll('svg path').forEach(p => p.style.fill = '#696FC7');
+    // Restore title based on context (search vs form)
+    el.title = (el.dataset && el.dataset.survsayContext === 'search') ? 'Search with Survsay' : 'Fill this form with Survsay';
+    // Reset to original content (logo only)
+    const logoImg = `<img src="${chrome.runtime.getURL('logo.PNG')}" alt="Survsay" style="width:14px;height:14px;object-fit:contain;border-radius:3px;" />`;
+    el.innerHTML = `${logoImg}`;
     recordingState.isStopping = false;
 }
 
@@ -654,9 +670,264 @@ function attachRewriterButtons() {
     });
 }
 
+// Gather context about a field to improve rewriting
+function getFieldContext(field) {
+    const context = {
+        label: '',
+        placeholder: field.placeholder || '',
+        type: field.type || 'text',
+        name: field.name || '',
+        id: field.id || '',
+        hasNumbers: /\d/.test(field.value),
+        hasProperNouns: false,
+        isNameField: false,
+        isEmailField: false,
+        isPhoneField: false,
+        isIdField: false,
+        isUrlField: false,
+        isDateField: false,
+        isAddressField: false,
+        instructions: ''
+    };
+
+    // Try to find associated label
+    if (field.id) {
+        const label = document.querySelector(`label[for="${field.id}"]`);
+        if (label) context.label = label.textContent.trim();
+    }
+    if (!context.label) {
+        const parent = field.closest('label');
+        if (parent) context.label = parent.textContent.replace(field.value, '').trim();
+    }
+    if (!context.label) {
+        const prevLabel = field.previousElementSibling;
+        if (prevLabel && (prevLabel.tagName === 'LABEL' || prevLabel.classList.contains('label'))) {
+            context.label = prevLabel.textContent.trim();
+        }
+    }
+
+    // Detect if field is for names (first name, last name, full name, etc.)
+    const meta = `${context.label} ${context.placeholder} ${context.name} ${context.id}`.toLowerCase();
+
+    // Name fields
+    const namePatterns = /(\bname\b|\bfirst\b|\blast\b|\bsurname\b|\bgiven\b|full\s*-?\s*name|user\s*-?\s*name|username)/i;
+    const isNameField = namePatterns.test(meta);
+    context.isNameField = isNameField;
+
+    // Email fields
+    const emailPatterns = /(e[-\s]?mail|\bemail\b)/i;
+    context.isEmailField = emailPatterns.test(meta) || context.type === 'email';
+
+    // Phone fields
+    const phonePatterns = /(phone|mobile|telephone|tel\b|cell\b|whatsapp|contact\s*number|phone\s*number)/i;
+    context.isPhoneField = phonePatterns.test(meta) || context.type === 'tel';
+
+    // ID fields (employee id, student id, account number, national id, ssn, passport, etc.)
+    const idPatterns = /(employee|student|tax|account|national|passport|driver|applicant|customer|user)\s*(id|number|no\.?|#)\b|\b(id\s*number|id#|id no\.?|ssn|nin|nid|pan|aadhaar|aadhar|dni|cedula|rfc|curp|nif)\b/i;
+    context.isIdField = idPatterns.test(meta);
+
+    // URL fields
+    const urlPatterns = /(url|website|web\s*site|link|homepage|home\s*page|portfolio)/i;
+    context.isUrlField = urlPatterns.test(meta) || context.type === 'url';
+
+    // Date/time fields
+    const datePatterns = /(date|dob|birth\s*date|birthday|start\s*date|end\s*date|expiry|expiration|exp\s*date|mm\/?yy(?:yy)?|yy(?:yy)?)/i;
+    const dateTypes = ['date', 'datetime-local', 'month', 'time', 'week'];
+    context.isDateField = datePatterns.test(meta) || dateTypes.includes(context.type);
+
+    // Address fields previously blocked; now we let AI + masking preserve them. Keep detection for instruction hints only.
+    const addressPatterns = /(address|street|st\.?\b|avenue|ave\.?\b|road|rd\.?\b|boulevard|blvd\.?\b|lane|ln\.?\b|drive|dr\.?\b|court|ct\.?\b|place|pl\.?\b|square|sq\.?\b|trail|trl\.?\b|parkway|pkwy\.?\b|circle|cir\.?\b|city|state|province|region|county|zip|postal|postcode|country|apt|apartment|suite|ste\.?\b|unit|building|bldg)/i;
+    context.isAddressField = addressPatterns.test(meta);
+
+    // Detect if field contains capitalized words (likely proper nouns)
+    const words = field.value.split(/\s+/);
+    context.hasProperNouns = words.some(word =>
+        word.length > 1 && word[0] === word[0].toUpperCase() && word.slice(1) === word.slice(1).toLowerCase()
+    );
+
+    // Build context instructions for the AI
+    const hints = [];
+    if (isNameField || context.hasProperNouns) {
+        hints.push("Do NOT change any names or proper nouns");
+    }
+    if (context.hasNumbers) {
+        hints.push("Do NOT change any numbers");
+    }
+    if (context.isEmailField) {
+        hints.push("Do NOT change any email addresses");
+    }
+    if (context.isPhoneField) {
+        hints.push("Do NOT change any phone numbers");
+    }
+    if (context.isIdField) {
+        hints.push("Do NOT change any IDs or identification numbers");
+    }
+    if (context.isUrlField) {
+        hints.push("Do NOT change any URLs or links");
+    }
+    if (context.isDateField) {
+        hints.push("Do NOT change any dates or date formats");
+    }
+    // Currency and percentages guidance (applies when present in text)
+    if (/[€£¥₹$]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD)\b/.test(field.value)) {
+        hints.push("Do NOT change any currency amounts");
+    }
+    if (/\d+\s*%|\bpercent\b/i.test(field.value)) {
+        hints.push("Do NOT change any percentages");
+    }
+    if (context.isAddressField) {
+        hints.push("Do NOT change any postal addresses");
+    }
+    if (context.label) {
+        hints.push(`This is for: "${context.label}"`);
+    } else if (context.placeholder) {
+        hints.push(`Placeholder: "${context.placeholder}"`);
+    }
+
+    context.instructions = hints.length > 0 ? hints.join('. ') + '.' : '';
+    return context;
+}
+
+// Replace sensitive substrings with placeholders so the rewriter preserves them
+function maskSensitiveSubstrings(text) {
+    let tokens = [];
+    let idxEmail = 0, idxPhone = 0, idxId = 0, idxUrl = 0, idxDate = 0, idxCurr = 0, idxPct = 0, idxAddr = 0;
+    let out = text;
+
+    // URLs (http/https/www or common domain forms)
+    const urlRe = /(https?:\/\/[^\s)]+|www\.[^\s)]+|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[\w#?&=+%\-.]*)?)/gi;
+    out = out.replace(urlRe, (m) => {
+        const ph = `__SURVSAY_URL_${++idxUrl}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Emails
+    const emailRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+    out = out.replace(emailRe, (m) => {
+        const ph = `__SURVSAY_EMAIL_${++idxEmail}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Phone numbers (7-15 digits total, allow separators)
+    const phoneRe = /\+?\d[\d\s().-]{5,}\d/g;
+    out = out.replace(phoneRe, (m) => {
+        // Heuristic: ensure at least 7 digits
+        const digits = (m.match(/\d/g) || []).length;
+        if (digits < 7 || digits > 15) return m;
+        const ph = `__SURVSAY_PHONE_${++idxPhone}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Generic IDs (common keywords, then token)
+    const idRe = /(\b(?:ssn|nin|nid|pan|aadhaar|aadhar|dni|cedula|curp|rfc|nif|passport|driver'?s?\s?license|account(?:\s*number)?|customer\s*id|user\s*id|employee\s*id|student\s*id|national\s*id)\b[^\n\r\t]*)?\b([A-Za-z0-9][A-Za-z0-9\-]{3,})\b/gim;
+    out = out.replace(idRe, (m) => {
+        // Avoid replacing if it already contains a placeholder
+        if (/__SURVSAY_(EMAIL|PHONE|ID)_\d+__/.test(m)) return m;
+        // Avoid obvious words-only tokens
+        if (/^[A-Za-z]{1,}$/.test(m)) return m;
+        const ph = `__SURVSAY_ID_${++idxId}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Dates
+    const datePatterns = [
+        /\b\d{4}-\d{2}-\d{2}\b/g,                         // YYYY-MM-DD
+        /\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})\b/g,  // 12/31/2025 or 31-12-25
+        /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s*\d{4})?\b/gi, // Month 12, 2025
+        /\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/gi
+    ];
+    datePatterns.forEach(re => {
+        out = out.replace(re, (m) => {
+            const ph = `__SURVSAY_DATE_${++idxDate}__`;
+            tokens.push({ placeholder: ph, value: m });
+            return ph;
+        });
+    });
+
+    // Currency amounts (symbol/code before or after number)
+    const currBefore = /(?<!\w)(?:[$€£¥₹]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD)\b)\s?\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{2})?/gi;
+    out = out.replace(currBefore, (m) => {
+        const ph = `__SURVSAY_CURR_${++idxCurr}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+    const currAfter = /\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{2})?\s?(?:[$€£¥₹]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD)\b)/gi;
+    out = out.replace(currAfter, (m) => {
+        const ph = `__SURVSAY_CURR_${++idxCurr}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Percentages
+    const pctRe1 = /\b\d+(?:[.,]\d+)?\s*%\b/g;
+    out = out.replace(pctRe1, (m) => {
+        const ph = `__SURVSAY_PCT_${++idxPct}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+    const pctRe2 = /\b\d+(?:[.,]\d+)?\s*(?:percent|per\s*cent)\b/gi;
+    out = out.replace(pctRe2, (m) => {
+        const ph = `__SURVSAY_PCT_${++idxPct}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Postal addresses: number + street word
+    const addrStreetWords = '(Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Court|Ct\.?|Place|Pl\.?|Square|Sq\.?|Trail|Trl\.?|Parkway|Pkwy\.?|Circle|Cir\.?)';
+    const addrRe = new RegExp(`\\b\\d{1,6}\\s+[A-Za-z0-9.'\\-]+\\s+${addrStreetWords}(?:\\s+(?:Apt|Apartment|Unit|Suite|Ste\.?|#)\\s*[^,\n]+)?`, 'gi');
+    out = out.replace(addrRe, (m) => {
+        const ph = `__SURVSAY_ADDR_${++idxAddr}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    return { sanitizedText: out, tokens };
+}
+
+function unmaskSensitiveSubstrings(text, tokens) {
+    let out = text;
+    tokens.forEach(t => {
+        out = out.replaceAll(t.placeholder, t.value);
+    });
+    return out;
+}
+
+// Heuristic: return true when the content is essentially just URLs with little/no extra text
+function isLikelyUrlOnlyContent(text) {
+    if (!text) return false;
+    const urlRe = /(https?:\/\/[^\s)]+|www\.[^\s)]+|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[\w#?&=+%\-.]*)?)/gi;
+    const withoutUrls = text.replace(urlRe, ' ').replace(/[\s,;|:()\-_/]+/g, '').trim();
+    // If after removing URLs and common separators there's almost nothing left, treat as URL-only
+    return withoutUrls.length < 3;
+}
+
 async function handleRewrite(field, button) {
     const text = field.value;
     if (!text) return;
+
+    // Gather context about this field
+    const fieldContext = getFieldContext(field);
+
+    // Minimal logging only on critical failures (verbose logs removed)
+
+    // If this is a protected field (names, emails, phones, IDs), do not rewrite
+    if (
+        fieldContext.isNameField ||
+        fieldContext.isEmailField ||
+        fieldContext.isPhoneField ||
+        fieldContext.isIdField ||
+        fieldContext.isDateField ||
+        /* Allow address fields to go through; AI and masking will preserve them */
+        field.type === 'url'
+    ) {
+        // no-op: keep original text
+        button.style.transform = 'rotate(0deg)';
+        return;
+    }
 
     // Show global busy overlay
     showBusy();
@@ -668,6 +939,10 @@ async function handleRewrite(field, button) {
         chrome.storage.sync.get({ rewriteTone: 'original', rewriteLength: 'original' }, resolve);
     });
     const { rewriteTone, rewriteLength } = settings;
+
+    // Mask sensitive data inside free text so the rewriter preserves them
+    const { sanitizedText, tokens } = maskSensitiveSubstrings(text);
+    // Masking done; proceed
 
     const isNanoEligible = await new Promise((resolve) => {
         const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
@@ -702,16 +977,16 @@ async function handleRewrite(field, button) {
                     }
                 };
                 window.addEventListener('message', onRewriteResponse);
-                window.postMessage({ survsay: 'REWRITE_TEXT', text, tone: rewriteTone, length: rewriteLength, channel }, '*');
+                window.postMessage({ survsay: 'REWRITE_TEXT', text: sanitizedText, tone: rewriteTone, length: rewriteLength, context: fieldContext, channel }, '*');
             });
         } catch (error) {
-            console.warn("Survsay: Nano rewrite failed. Falling back to Firebase.", error);
+            // Silent fallback to Firebase
         }
     }
 
     if (!rewrittenText) {
         try {
-            rewrittenText = await new Promise((resolve, reject) => {
+            const firebasePromise = new Promise((resolve, reject) => {
                 const channel = `survsay_rewrite_firebase_resp_${Math.random().toString(36).slice(2)}`;
                 const onFirebaseResponse = (e) => {
                     if (e.data.action === 'SURVSAY_FIREBASE_REWRITE_RESULT' && e.data.channel === channel) {
@@ -724,8 +999,14 @@ async function handleRewrite(field, button) {
                     }
                 };
                 window.addEventListener('message', onFirebaseResponse);
-                window.postMessage({ action: 'SURVSAY_REWRITE_TEXT_FIREBASE', text, tone: rewriteTone, length: rewriteLength, channel }, '*');
+                window.postMessage({ action: 'SURVSAY_REWRITE_TEXT_FIREBASE', text: sanitizedText, tone: rewriteTone, length: rewriteLength, context: fieldContext, channel }, '*');
             });
+            // Add a timeout so we don't hang forever if something goes wrong
+            const timeoutMs = 15000;
+            rewrittenText = await Promise.race([
+                firebasePromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase rewrite timeout after ' + timeoutMs + 'ms')), timeoutMs))
+            ]);
         } catch (error) {
             console.error("Survsay: Firebase rewrite failed.", error);
         }
@@ -733,7 +1014,11 @@ async function handleRewrite(field, button) {
 
     button.style.transform = 'rotate(0deg)';
     if (rewrittenText) {
-        field.value = rewrittenText;
+        // Restore sensitive substrings
+        const restored = unmaskSensitiveSubstrings(rewrittenText, tokens);
+        field.value = restored;
+    } else {
+        // No output; remain silent
     }
     hideBusy();
 }

@@ -38,7 +38,8 @@
         "inpage.js",
         "firebase-config.js",
         "firebaseAI.js",
-        "firebase-injector.js"
+        "firebase-injector.js",
+        "logo.PNG"
       ],
       "matches": ["<all_urls>"]
     }

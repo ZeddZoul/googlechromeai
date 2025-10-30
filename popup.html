@@ -23,14 +23,11 @@
       .logo {
         width: 48px;
         height: 48px;
-        border-radius: 12px;
-        background: #696fc7;
+        border-radius: 0;
+        background: transparent;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 700;
-        font-size: 16px;
-        color: #fff;
       }
       .title-group {
         line-height: 1.2;
@@ -144,12 +141,12 @@
         transition: background 0.12s ease, color 0.12s ease;
       }
       .dropdown-item:hover {
-        background: #f5d3c4;
-        color: #696fc7;
+        background: #a7aae1; /* light purple */
+        color: #1f2937; /* keep text readable */
       }
       .dropdown-item.selected {
-        background: #f2aebb;
-        color: #696fc7;
+        background: #696fc7; /* primary purple */
+        color: #ffffff;
       }
       button {
         padding: 8px 12px;
@@ -212,7 +209,18 @@
   <body>
     <div class="container">
       <div class="header">
-        <div class="logo">S</div>
+        <div class="logo">
+          <img
+            src="logo.PNG"
+            alt="Survsay"
+            style="
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+              border-radius: 0;
+            "
+          />
+        </div>
         <div class="title-group">
           <div class="title">Survsay Settings</div>
           <div class="subtitle">Configure your experience</div>
