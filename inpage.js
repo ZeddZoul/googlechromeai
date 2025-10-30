@@ -4,13 +4,8 @@
   window.__survsay_inpage_installed = true;
 
   function respond(channel, payload) {
-    try {
-      console.log('Survsay: inpage.js responding on channel:', channel, 'with payload:', payload);
+    if (channel && typeof channel === 'string') {
       window.postMessage({ channel, payload }, '*');
-    } catch (e) {
-      console.error('Survsay: inpage.js respond error:', e);
-      const safe = { success: false, error: 'Failed to post response: ' + String(e) };
-      window.postMessage({ channel, payload: safe }, '*');
     }
   }
 
@@ -41,15 +36,11 @@
       const { channel } = ev.data;
       if (!channel) return;
 
-      console.log('Survsay: Checking Nano eligibility...');
       let isEligible = false;
       try {
         if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
           const availability = await LanguageModel.availability(modelCapabilities);
           isEligible = availability !== 'unavailable';
-          console.log('Survsay: Nano availability status:', availability);
-        } else {
-          console.log('Survsay: LanguageModel API not found for eligibility check.');
         }
       } catch (e) {
         console.error('Survsay: Error during Nano eligibility check:', e);
@@ -65,34 +56,27 @@
       const { channel } = ev.data;
       if (!channel) return;
 
-      console.log('Survsay: Checking on-device availability...');
       let isAvailable = false;
       let session = null;
       try {
         if (typeof LanguageModel !== 'undefined' && LanguageModel.availability) {
           const availability = await LanguageModel.availability(modelCapabilities);
           isAvailable = availability !== 'unavailable';
-          console.log('Survsay: LanguageModel availability:', availability);
-          
+
           // If available, create session for form extraction (Layer 1)
           if (isAvailable) {
             try {
               session = await ensureSession();
-              console.log('Survsay: Nano session ready for form extraction');
             } catch (e) {
               console.warn('Survsay: Could not create Nano session', e);
               session = null;
             }
           }
-        } else {
-          console.log('Survsay: LanguageModel not available');
         }
       } catch (e) {
-        console.log('Survsay: LanguageModel check failed:', e);
         isAvailable = false;
       }
 
-      console.log('Survsay: On-device available:', isAvailable);
       respond(channel, { isAvailable, session: isAvailable ? 'available' : null });
       return;
     }
@@ -101,15 +85,11 @@
       const { audioBase64, channel } = ev.data;
       if (!channel) return;
 
-      console.log('Survsay: Processing audio in page, base64 length:', audioBase64.length);
-
       try {
         const session = await ensureSession();
-        console.log('Survsay: Session created for audio processing...');
 
         const prompt = `Please transcribe the following audio. Return only the transcribed text, nothing else.`;
 
-        console.log('Survsay: Calling session.prompt for audio transcription...');
         const result = await session.prompt(prompt, {
           contents: [
             { role: "user", parts: [{ text: prompt }] },
@@ -118,13 +98,10 @@
           ]
         });
 
-        console.log('Survsay: Audio transcription result:', result);
-
         // Check if the result is actually a transcription or just a generic response
         if (result && result.length > 10 && !result.includes("paste the audio") && !result.includes("transcribe it")) {
           respond(channel, { success: true, result: { transcription: result } });
         } else {
-          console.log('Survsay: On-device transcription returned generic response, treating as failure');
           respond(channel, { success: false, error: 'On-device transcription failed - generic response' });
         }
       } catch (err) {
@@ -136,10 +113,6 @@
     if (ev.data.survsay === 'PROCESS_TEXT_INPAGE') {
       const { text, schema, context, channel } = ev.data;
       if (!channel) return;
-
-      console.log('Survsay: Processing text with Nano (Layer 1):', text.substring(0, 50) + '...');
-      console.log('Survsay: Form schema:', schema);
-      console.log('Survsay: Surrounding text context:', context);
 
       try {
         const session = await ensureSession();

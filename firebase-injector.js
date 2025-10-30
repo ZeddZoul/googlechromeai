@@ -26,10 +26,9 @@
       console.log('Survsay [Firebase Injector]: Firebase app initialized');
       
       const ai = getAI(app, { backend: new GoogleAIBackend() });
-      console.log('Survsay [Firebase Injector]: Gemini Developer API initialized');
       
       const model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-      console.log('Survsay [Firebase Injector]: Generative model created (gemini-2.5-flash)');
+
       
       // Expose to global scope for content scripts to access
       window.__survsay_firebase_app = app;
@@ -41,7 +40,6 @@
       window.addEventListener('message', async (event) => {
         if (event.data.action === 'SURVSAY_TRANSCRIBE_AUDIO') {
           try {
-            console.log('Survsay [Firebase Injector]: Received transcription request');
             const base64Audio = event.data.audioBase64;
             
             const result = await model.generateContent([
@@ -50,7 +48,6 @@
             ]);
             
             const transcription = result.response.text();
-            console.log('Survsay [Firebase Injector]: Transcription complete:', transcription.substring(0, 100) + '...');
             
             // Send result back to content script
             window.postMessage({
@@ -68,7 +65,6 @@
         
         if (event.data.action === 'SURVSAY_PROCESS_TEXT_FIREBASE') {
           try {
-            console.log('Survsay [Firebase Injector]: Received text processing request (Layer 2)');
             const { text, schema, context } = event.data;
 
             const prompt = \`
@@ -94,7 +90,6 @@
             
             const result = await model.generateContent(prompt);
             let jsonString = result.response.text();
-            console.log('Survsay [Firebase Injector]: Firebase extraction complete:', jsonString.substring(0, 100) + '...');
             
             // Clean the response to ensure it's valid JSON
             if (jsonString.includes('\\\`\\\`\\\`json')) {
@@ -119,7 +114,6 @@
         }
         
         if (event.data.action === 'SURVSAY_QUERY_FIREBASE') {
-          console.log('Survsay [Firebase Injector]: Received Firebase availability query');
           window.postMessage({
             action: 'SURVSAY_FIREBASE_READY',
             ready: true
@@ -127,18 +121,14 @@
         }
       });
       
-      console.log('Survsay [Firebase Injector]: Firebase initialized and ready');
-      
       // ✅ Send postMessage to notify content script (crosses isolated world boundary)
       window.postMessage({
         action: 'SURVSAY_FIREBASE_READY',
         ready: true
       }, '*');
-      console.log('Survsay [Firebase Injector]: Ready postMessage sent to content script');
       
       // ✅ Dispatch custom event to signal completion (works across module boundary)
       window.dispatchEvent(new CustomEvent('survsay-firebase-ready'));
-      console.log('Survsay [Firebase Injector]: Ready event dispatched');
       
     } catch (error) {
       console.error('Survsay [Firebase Injector]: Initialization failed:', error);
@@ -147,16 +137,13 @@
     }
   `;
   document.head.appendChild(script);
-  console.log('Survsay [Firebase Injector]: Firebase SDK module injected into page');
 
   // Listen for the ready event and set the flag in the outer scope
   window.addEventListener('survsay-firebase-ready', () => {
     window.__survsay_firebase_injector_complete = true;
-    console.log('Survsay [Firebase Injector]: Completion flag set in main window scope');
   }, { once: true });
 
   window.addEventListener('survsay-firebase-failed', () => {
     window.__survsay_firebase_injector_complete = false;
-    console.log('Survsay [Firebase Injector]: Failed flag set in main window scope');
   }, { once: true });
 })();

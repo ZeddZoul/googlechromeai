@@ -37,7 +37,6 @@ function init() {
                 let firebaseReady = false;
                 const onFirebaseReadyMessage = (event) => {
                     if (event.data && event.data.action === 'SURVSAY_FIREBASE_READY') {
-                        console.log('Survsay: Firebase injector confirmed ready via postMessage');
                         firebaseReady = true;
                         window.removeEventListener('message', onFirebaseReadyMessage);
                     }
@@ -295,8 +294,6 @@ function findDivForms() {
 }
 
 async function processRecording(blob, fallbackTranscript) {
-    console.log("Survsay: Starting multi-layer transcription process...");
-
     // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
         const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
@@ -319,7 +316,6 @@ async function processRecording(blob, fallbackTranscript) {
     if (isNanoEligible) {
         // Layer 1: Try Gemini Nano for transcription.
         try {
-            console.log("Survsay: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
             const base64Audio = await blobToBase64(blob);
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_nano_transcribe_${Math.random().toString(36).slice(2)}`;
@@ -338,7 +334,6 @@ async function processRecording(blob, fallbackTranscript) {
             });
 
             if (nanoResult) {
-                console.log("Survsay: Gemini Nano transcription successful (Layer 1).");
                 transcription = nanoResult;
             }
         } catch (error) {
@@ -351,7 +346,6 @@ async function processRecording(blob, fallbackTranscript) {
     // Layer 2: If Nano failed or was ineligible, try Firebase AI.
     if (!transcription) {
         try {
-            console.log("Survsay: Attempting transcription with Firebase AI (Layer 2)...");
             const base64Audio = await blobToBase64(blob);
             const firebaseResult = await new Promise((resolve, reject) => {
                 const onFirebaseResponse = (e) => {
@@ -369,7 +363,6 @@ async function processRecording(blob, fallbackTranscript) {
             });
 
             if (firebaseResult) {
-                console.log("Survsay: Firebase AI transcription successful (Layer 2).");
                 transcription = firebaseResult;
             }
         } catch (error) {
@@ -379,7 +372,6 @@ async function processRecording(blob, fallbackTranscript) {
 
     // Layer 3: If all else fails, use the Web Speech API fallback.
     if (!transcription && fallbackTranscript) {
-        console.log("Survsay: Using Web Speech API transcription as fallback (Layer 3).");
         transcription = fallbackTranscript;
     }
 
@@ -402,7 +394,6 @@ async function processTextWithAI(transcription, isNanoEligible) {
 
     if (isNanoEligible) {
         // Layer 1: Use Gemini Nano for text extraction.
-        console.log("Survsay: Processing text with Gemini Nano (Layer 1)...");
         try {
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_resp_${Math.random().toString(36).slice(2)}`;
@@ -420,12 +411,10 @@ async function processTextWithAI(transcription, isNanoEligible) {
             });
             fillForm(nanoResult, recordingState.activeForm);
         } catch (error) {
-            console.warn("Survsay: Nano text processing failed (Layer 1). Now attempting Firebase fallback (Layer 2).", error);
             await processTextWithFirebase(transcription, schema, context);
         }
     } else {
         // Layer 2: Use Firebase for text extraction.
-        console.log("Survsay: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
         await processTextWithFirebase(transcription, schema, context);
     }
 }
@@ -562,9 +551,6 @@ if (typeof process === 'undefined' || process.env.NODE_ENV !== 'test') {
             window.__survsay_firebase_injected = true;
             const script = document.createElement('script');
             script.src = chrome.runtime.getURL('firebase-injector.js');
-            script.onload = () => {
-                console.log('Survsay: Firebase injector script loaded, starting init with CSP check');
-            };
             document.head.appendChild(script);
         }
     })();
