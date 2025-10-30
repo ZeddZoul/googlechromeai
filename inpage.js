@@ -198,12 +198,9 @@
 
         try {
             const session = await ensureSession();
-            const prompt = `
-                Rewrite the following text in a ${tone} tone.
-                Return only the rewritten text, and nothing else.
-
-                Text: "${text}"
-            `;
+            const prompt = 'Rewrite the following text in a ' + tone + ' tone.' +
+                         ' Return only the rewritten text, and nothing else.' +
+                         '\n\nText: "' + text + '"';
 
             const result = await session.prompt(prompt);
             console.log('Survsay: Nano rewrite result:', result);

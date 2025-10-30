@@ -121,14 +121,11 @@
         if (event.data.action === 'SURVSAY_REWRITE_TEXT_FIREBASE') {
             try {
                 const { text, tone, channel } = event.data;
-                console.log(`Survsay [Firebase Injector]: Received rewrite request with tone '${tone}'`);
+                console.log('Survsay [Firebase Injector]: Received rewrite request with tone \'' + tone + '\'');
 
-                const prompt = `
-                    Rewrite the following text in a ${tone} tone.
-                    Return only the rewritten text, and nothing else.
-
-                    Text: "${text}"
-                `;
+                const prompt = 'Rewrite the following text in a ' + tone + ' tone.' +
+                             ' Return only the rewritten text, and nothing else.' +
+                             '\n\nText: "' + text + '"';
 
                 const result = await model.generateContent(prompt);
                 const rewrittenText = result.response.text();
