@@ -27,6 +27,26 @@ let recordingState = {
     activeForm: null,
 };
 
+function init() {
+    return new Promise((resolve) => {
+        chrome.storage.sync.get({ micEnabled: true }, (settings) => {
+            if (settings.micEnabled) {
+                attachMicsToForms();
+                setTimeout(() => {
+                    if (!window.__survsay_firebase_injector_complete) {
+                        console.warn('Survsay: Firebase injector failed to load, likely due to CSP. Disabling mics.');
+                        removeAllMics();
+                        chrome.runtime.sendMessage({ type: 'CSP_BLOCKED' });
+                    }
+                    resolve();
+                }, 500);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
 function attachMicsToForms() {
     const forms = document.querySelectorAll('form');
     const divForms = findDivForms();
@@ -44,7 +64,7 @@ function attachMicsToForms() {
         el.style.color = 'black';
         el.style.border = '1px solid #7C3AED';
         el.style.borderRadius = '8px';
-        el.style.padding = '8px 12px';
+        el.style.padding = '2px 6px';
         el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
         el.style.display = 'flex';
         el.style.alignItems = 'center';
@@ -52,8 +72,8 @@ function attachMicsToForms() {
         el.style.cursor = 'pointer';
         el.style.zIndex = 2147483646;
         el.style.fontFamily = 'sans-serif';
-        el.style.fontSize = '14px';
-        el.style.fontWeight = '600';
+        el.style.fontSize = '12px';
+        el.style.fontWeight = 'normal';
         el.style.transition = 'all 0.2s ease-in-out';
         el.style.opacity = '0';
         el.style.transform = 'translateY(5px)';
@@ -67,19 +87,26 @@ function attachMicsToForms() {
         const setPosition = () => {
             const formRect = form.getBoundingClientRect();
             chrome.storage.sync.get({ micPosition: 'top-right' }, (settings) => {
-                const isTallForm = formRect.height >= window.innerHeight * 0.9;
+                let pos = settings.micPosition;
                 el.style.position = 'fixed';
 
-                if (isTallForm) {
-                    // Special case for tall forms: position button inside at top-right.
-                    el.style.top = `${formRect.top + 10}px`; // 10px from form's top
-                    el.style.left = `${formRect.right - el.offsetWidth - 10}px`; // 10px from form's right
+                // --- Calculate potential top position ---
+                let topPos = 0;
+                if (pos.includes('top')) {
+                    topPos = formRect.top - el.offsetHeight - 5;
+                } else { // 'bottom'
+                    topPos = formRect.bottom + 5;
+                }
+
+                // --- Adjust if off-screen ---
+                // If the calculated top is off the viewport, place it inside the form.
+                if (topPos < 0) {
+                    el.style.top = `${formRect.top + 10}px`;
+                    el.style.left = `${formRect.right - el.offsetWidth - 10}px`;
                     return;
                 }
 
-                // --- Default positioning for non-tall forms ---
-                let pos = settings.micPosition;
-
+                // --- Default positioning ---
                 // Smarter positioning: if bottom is off-screen, flip to top
                 if (pos.includes('bottom')) {
                     const buttonBottom = formRect.bottom + el.offsetHeight + 5;
@@ -89,15 +116,14 @@ function attachMicsToForms() {
                 }
 
                 if (pos.includes('top')) {
-                    el.style.top = `${formRect.top - el.offsetHeight - 5}px`; // 5px above
+                    el.style.top = `${formRect.top - el.offsetHeight - 5}px`;
+                } else { // 'bottom'
+                    el.style.top = `${formRect.bottom + 5}px`;
                 }
-                if (pos.includes('bottom')) {
-                    el.style.top = `${formRect.bottom + 5}px`; // 5px below
-                }
+
                 if (pos.includes('left')) {
                     el.style.left = `${formRect.left}px`;
-                }
-                if (pos.includes('right')) {
+                } else { // 'right'
                     el.style.left = `${formRect.right - el.offsetWidth}px`;
                 }
             });
@@ -189,6 +215,7 @@ async function handleStartRecording(el, form) {
 
         recordingState.isRecording = true;
         el.classList.add('survsay-recording');
+        el.classList.add('survsay-recording-pulse');
         el.style.background = '#DC2626'; // Red background for recording
         el.style.color = 'white';
         el.querySelector('span').textContent = 'stop recording';
@@ -207,6 +234,7 @@ async function handleStopRecording(el) {
     if (recordingState.mediaRecorder && recordingState.mediaRecorder.state !== 'inactive') recordingState.mediaRecorder.stop();
     else cleanupAudioResources();
     el.classList.remove('survsay-recording');
+    el.classList.remove('survsay-recording-pulse');
     el.style.background = 'white'; // Back to original white
     el.style.color = 'black';
     el.querySelector('span').textContent = 'fill this form with survsay';
@@ -471,13 +499,13 @@ function getSurroundingText(form) {
 function injectAnimationStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        @keyframes survsay-pulse {
-            0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(124, 58, 237, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+        @keyframes survsay-pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
         }
-        .survsay-recording {
-            animation: survsay-pulse 2s infinite;
+        .survsay-recording-pulse {
+            animation: survsay-pulse-red 2s infinite;
         }
     `;
     document.head.appendChild(style);
@@ -501,11 +529,6 @@ function main() {
         } catch (err) { console.warn('Survsay: failed to inject inpage.js', err); }
     })();
 
-    function init() {
-        chrome.storage.sync.get({ micEnabled: true }, (settings) => {
-            if (settings.micEnabled) attachMicsToForms();
-        });
-    }
 
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.type === 'SETTINGS_UPDATED') {
@@ -544,5 +567,6 @@ if (typeof module !== 'undefined' && module.exports) {
         recordingState,
         analyzeForm,
         fillForm,
+        init,
     };
 }

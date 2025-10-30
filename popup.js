@@ -57,6 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
     languageSelect.addEventListener('change', saveSettings);
     resetButton.addEventListener('click', resetSettings);
 
+    // Listen for CSP block messages from the content script
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+        if (msg.type === 'CSP_BLOCKED') {
+            document.querySelector('.settings-group').style.display = 'none';
+            document.querySelector('.footer').style.display = 'none';
+            document.getElementById('csp-warning').style.display = 'block';
+        }
+    });
+
     // Check for content script availability (CSP check)
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {

@@ -8,6 +8,7 @@ global.chrome = {
     runtime: {
         getURL: jest.fn(path => `chrome-extension://mock/${path}`),
         onMessage: { addListener: jest.fn() },
+        sendMessage: jest.fn(),
     },
     storage: {
         sync: {
@@ -66,6 +67,7 @@ const {
     recordingState,
     analyzeForm,
     fillForm,
+    init,
 } = require('./content_script');
 
 describe('Survsay Content Script', () => {
@@ -225,13 +227,11 @@ describe('Survsay Content Script', () => {
     // It fails to correctly simulate the asynchronous, multi-layer AI fallback logic.
     // This will be addressed in a future update.
 
-    test('should position the button inside for tall forms', () => {
-        // Mock a tall form environment
-        window.innerHeight = 1000;
+    test('should position the button inside the form if it would be off-screen', () => {
+        // Mock a form that is scrolled off-screen at the top
         const form = document.getElementById('form1');
         form.getBoundingClientRect = () => ({
-            height: 950, // 95% of viewport height
-            top: 20,
+            top: -50,
             right: 800,
         });
 
@@ -240,8 +240,28 @@ describe('Survsay Content Script', () => {
         const mic = document.querySelector('.survsay-floating-mic');
         // Need to wait for the setTimeout in the setPosition function
         setTimeout(() => {
-            expect(mic.style.top).toBe('30px'); // 20px (form top) + 10px
+            expect(mic.style.top).toBe('-40px'); // -50px (form top) + 10px
             expect(mic.style.left).not.toBe(''); // A value should be set
         }, 110);
+    });
+
+    test('should remove mics and send message on CSP failure', async () => {
+        jest.useFakeTimers();
+        window.__survsay_firebase_injector_complete = false;
+
+        const initPromise = init();
+
+        // Mics should be attached initially
+        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(1);
+
+        // Fast-forward timers to trigger the CSP check
+        jest.runAllTimers();
+
+        // Wait for the promise chain to resolve
+        await initPromise;
+
+        expect(document.querySelectorAll('.survsay-floating-mic').length).toBe(0);
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'CSP_BLOCKED' });
+        jest.useRealTimers();
     });
 });

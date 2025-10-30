@@ -135,4 +135,5 @@
   `;
   document.head.appendChild(script);
   console.log('Survsay [Firebase Injector]: Firebase SDK module injected into page');
+  window.__survsay_firebase_injector_complete = true; // Signal successful execution
 })();
