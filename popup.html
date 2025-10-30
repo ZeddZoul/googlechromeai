@@ -24,7 +24,7 @@
         width: 48px;
         height: 48px;
         border-radius: 12px;
-        background: #7c3aed;
+        background: #696fc7;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -96,13 +96,13 @@
         transition: all 0.18s ease-in-out;
       }
       .dropdown-trigger:hover {
-        border-color: #b794f6;
+        border-color: #a7aae1;
         background: #faf9fc;
       }
       .dropdown-trigger:focus-visible {
         outline: none;
-        border-color: #7c3aed;
-        box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+        border-color: #696fc7;
+        box-shadow: 0 0 0 3px rgba(105, 111, 199, 0.12);
       }
       .dropdown-caret {
         width: 0;
@@ -144,12 +144,12 @@
         transition: background 0.12s ease, color 0.12s ease;
       }
       .dropdown-item:hover {
-        background: #f3e8ff;
-        color: #5b21b6;
+        background: #f5d3c4;
+        color: #696fc7;
       }
       .dropdown-item.selected {
-        background: #ede9fe;
-        color: #5b21b6;
+        background: #f2aebb;
+        color: #696fc7;
       }
       button {
         padding: 8px 12px;
@@ -192,7 +192,7 @@
         border-radius: 50%;
       }
       input:checked + .slider {
-        background-color: #7c3aed;
+        background-color: #696fc7;
       }
       input:checked + .slider:before {
         transform: translateX(20px);
@@ -230,6 +230,46 @@
         <div class="setting">
           <label for="mic-position">Mic Position</label>
           <div id="mic-position" class="dropdown" data-value="top-right">
+            <button
+              type="button"
+              class="dropdown-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span class="dropdown-label">Top Right</span>
+              <span class="dropdown-caret"></span>
+            </button>
+            <div class="dropdown-menu" role="listbox">
+              <button
+                class="dropdown-item selected"
+                role="option"
+                data-value="top-right"
+              >
+                Top Right
+              </button>
+              <button class="dropdown-item" role="option" data-value="top-left">
+                Top Left
+              </button>
+              <button
+                class="dropdown-item"
+                role="option"
+                data-value="bottom-right"
+              >
+                Bottom Right
+              </button>
+              <button
+                class="dropdown-item"
+                role="option"
+                data-value="bottom-left"
+              >
+                Bottom Left
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="setting">
+          <label for="busy-position">Busy Indicator Position</label>
+          <div id="busy-position" class="dropdown" data-value="top-right">
             <button
               type="button"
               class="dropdown-trigger"

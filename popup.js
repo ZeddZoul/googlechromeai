@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const DEFAULTS = {
         micEnabled: true,
         micPosition: 'top-right',
+        busyPosition: 'top-right',
         language: 'en-US',
         rewriteTone: 'original',
         rewriteLength: 'original'
@@ -78,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.sync.get(DEFAULTS, (settings) => {
             micToggle.checked = settings.micEnabled;
             setDropdownValue('mic-position', settings.micPosition);
+            setDropdownValue('busy-position', settings.busyPosition);
             setDropdownValue('transcription-language', settings.language);
             setDropdownValue('rewrite-tone', settings.rewriteTone);
             setDropdownValue('rewrite-length', settings.rewriteLength);
@@ -89,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const settings = {
             micEnabled: micToggle.checked,
             micPosition: getDropdownValue('mic-position'),
+            busyPosition: getDropdownValue('busy-position'),
             language: getDropdownValue('transcription-language'),
             rewriteTone: getDropdownValue('rewrite-tone'),
             rewriteLength: getDropdownValue('rewrite-length')
@@ -120,10 +123,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listeners
     micToggle.addEventListener('change', saveSettings);
     wireDropdown('mic-position');
+    wireDropdown('busy-position');
     wireDropdown('transcription-language');
     wireDropdown('rewrite-tone');
     wireDropdown('rewrite-length');
     micPositionDD.addEventListener('change', saveSettings);
+    const busyPositionDD = document.getElementById('busy-position');
+    if (busyPositionDD) busyPositionDD.addEventListener('change', saveSettings);
     languageDD.addEventListener('change', saveSettings);
     rewriteToneDD.addEventListener('change', saveSettings);
     rewriteLengthDD.addEventListener('change', saveSettings);

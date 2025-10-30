@@ -29,13 +29,24 @@ let recordingState = {
 
 // --- Busy Overlay (uses brand palette) ---
 const SURVSAY_PALETTE = ['#696FC7', '#A7AAE1', '#F5D3C4', '#F2AEBB'];
+
 function ensureBusyUI() {
     if (document.getElementById('survsay-busy')) return;
-    const style = document.createElement('style');
-    style.id = 'survsay-busy-style';
-    style.textContent = `
+
+    // Get position from settings
+    chrome.storage.sync.get({ busyPosition: 'top-right' }, (settings) => {
+        const pos = settings.busyPosition || 'top-right';
+        let positionStyles = '';
+        if (pos === 'top-right') positionStyles = 'top:16px;right:16px;';
+        else if (pos === 'top-left') positionStyles = 'top:16px;left:16px;';
+        else if (pos === 'bottom-right') positionStyles = 'bottom:16px;right:16px;';
+        else if (pos === 'bottom-left') positionStyles = 'bottom:16px;left:16px;';
+
+        const style = document.createElement('style');
+        style.id = 'survsay-busy-style';
+        style.textContent = `
             .survsay-hidden{display:none !important}
-            #survsay-busy{position:fixed;top:16px;right:16px;z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;background:rgba(255,255,255,0.9);backdrop-filter:saturate(120%) blur(6px);border:1px solid #e8e7f5;box-shadow:0 10px 25px rgba(0,0,0,.08)}
+            #survsay-busy{position:fixed;${positionStyles}z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;background:rgba(255,255,255,0.9);backdrop-filter:saturate(120%) blur(6px);border:1px solid #e8e7f5;box-shadow:0 10px 25px rgba(0,0,0,.08)}
             #survsay-busy .spinner{width:22px;height:22px;border-radius:50%;position:relative;overflow:hidden;animation:survsay-rotate 1.1s linear infinite}
             #survsay-busy .spinner::before{content:'';position:absolute;inset:0;border-radius:50%;padding:2px;background:conic-gradient(${SURVSAY_PALETTE.join(',')});-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
             #survsay-busy .dot{position:absolute;inset:4px;border-radius:50%;background:linear-gradient(135deg, ${SURVSAY_PALETTE[1]}, #fff)}
@@ -45,26 +56,27 @@ function ensureBusyUI() {
             @keyframes survsay-rotate{to{transform:rotate(360deg)}}
             @keyframes survsay-indet{0%{margin-left:-40%}50%{margin-left:60%}100%{margin-left:120%}}
         `;
-    document.head.appendChild(style);
+        document.head.appendChild(style);
 
-    const box = document.createElement('div');
-    box.id = 'survsay-busy';
-    box.className = 'survsay-hidden';
-    box.innerHTML = `
+        const box = document.createElement('div');
+        box.id = 'survsay-busy';
+        box.className = 'survsay-hidden';
+        box.innerHTML = `
             <div class="spinner"><div class="dot"></div></div>
             <div style="display:flex;flex-direction:column;gap:2px;min-width:160px">
                 <div class="label">Survsay is working…</div>
                 <div class="progress"><div class="bar"></div></div>
             </div>
         `;
-    document.body.appendChild(box);
+        document.body.appendChild(box);
+    });
 }
 
 function showBusy(message) {
     ensureBusyUI();
     const box = document.getElementById('survsay-busy');
     const label = box.querySelector('.label');
-    if (message) label.textContent = message;
+    label.textContent = message || 'Survsay is busy…';
     box.classList.remove('survsay-hidden');
 }
 
@@ -121,7 +133,7 @@ function attachMicsToForms() {
         el.style.position = 'absolute';
         el.style.background = 'white';
         el.style.color = 'black';
-        el.style.border = '1px solid #7C3AED';
+        el.style.border = '1px solid #696FC7';
         el.style.borderRadius = '8px';
         el.style.padding = '2px 6px';
         el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
@@ -138,7 +150,7 @@ function attachMicsToForms() {
         el.style.transform = 'translateY(5px)';
         el.title = 'Survsay - Click to fill this form with your voice';
 
-        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#7C3AED"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#7C3AED" opacity="0.9"/></svg>`;
+        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#696FC7"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#696FC7" opacity="0.9"/></svg>`;
         el.innerHTML = `${micIconSvg}<span>fill this form with survsay</span>`;
 
         document.body.appendChild(el); // Append to body to avoid form layout issues
@@ -298,7 +310,7 @@ async function handleStopRecording(el) {
     el.style.color = 'black';
     el.querySelector('span').textContent = 'fill this form with survsay';
     // And all SVG paths back to purple
-    el.querySelectorAll('svg path').forEach(p => p.style.fill = '#7C3AED');
+    el.querySelectorAll('svg path').forEach(p => p.style.fill = '#696FC7');
     recordingState.isStopping = false;
 }
 
@@ -341,7 +353,7 @@ function findDivForms() {
 }
 
 async function processRecording(blob, fallbackTranscript) {
-    showBusy('Analyzing audio…');
+    showBusy();
 
     // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
@@ -365,7 +377,7 @@ async function processRecording(blob, fallbackTranscript) {
     if (isNanoEligible) {
         // Layer 1: Try Gemini Nano for transcription.
         try {
-            showBusy('Transcribing on-device…');
+            showBusy();
             const base64Audio = await blobToBase64(blob);
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_nano_transcribe_${Math.random().toString(36).slice(2)}`;
@@ -390,13 +402,13 @@ async function processRecording(blob, fallbackTranscript) {
             console.warn("Survsay: Gemini Nano transcription failed (Layer 1).", error);
         }
     } else {
-        showBusy('Transcribing via cloud…');
+        showBusy();
     }
 
     // Layer 2: If Nano failed or was ineligible, try Firebase AI.
     if (!transcription) {
         try {
-            showBusy('Transcribing via cloud…');
+            showBusy();
             const base64Audio = await blobToBase64(blob);
             const firebaseResult = await new Promise((resolve, reject) => {
                 const onFirebaseResponse = (e) => {
@@ -423,7 +435,7 @@ async function processRecording(blob, fallbackTranscript) {
 
     // Layer 3: If all else fails, use the Web Speech API fallback.
     if (!transcription && fallbackTranscript) {
-        showBusy('Using Web Speech API…');
+        showBusy();
         transcription = fallbackTranscript;
     }
 
@@ -447,7 +459,7 @@ async function processTextWithAI(transcription, isNanoEligible) {
 
     if (isNanoEligible) {
         // Layer 1: Use Gemini Nano for text extraction.
-        showBusy('Extracting fields on-device…');
+        showBusy();
         try {
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_resp_${Math.random().toString(36).slice(2)}`;
@@ -471,7 +483,7 @@ async function processTextWithAI(transcription, isNanoEligible) {
         }
     } else {
         // Layer 2: Use Firebase for text extraction.
-        showBusy('Extracting fields via cloud…');
+        showBusy();
         await processTextWithFirebase(transcription, schema, context);
     }
 }
@@ -567,7 +579,7 @@ function attachRewriterButtons() {
         button.classList.add('survsay-rewriter-button');
         button.style.position = 'absolute';
         button.style.background = 'white';
-        button.style.border = '1px solid #7C3AED';
+        button.style.border = '1px solid #696FC7';
         button.style.borderRadius = '6px';
         button.style.padding = '2px';
         button.style.cursor = 'pointer';
@@ -577,7 +589,7 @@ function attachRewriterButtons() {
         button.style.lineHeight = '0';
         button.title = 'Rewrite this text with Survsay';
 
-        const rewriterIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#7C3AED"><path d="M9.5,3A1.5,1.5 0 0,0 8,4.5A1.5,1.5 0 0,0 9.5,6A1.5,1.5 0 0,0 11,4.5A1.5,1.5 0 0,0 9.5,3M19,13.5A1.5,1.5 0 0,0 17.5,12A1.5,1.5 0 0,0 16,13.5A1.5,1.5 0 0,0 17.5,15A1.5,1.5 0 0,0 19,13.5M19,3.5A1.5,1.5 0 0,0 17.5,2A1.5,1.5 0 0,0 16,3.5A1.5,1.5 0 0,0 17.5,5A1.5,1.5 0 0,0 19,3.5M14.5,21A1.5,1.5 0 0,0 16,19.5A1.5,1.5 0 0,0 14.5,18A1.5,1.5 0 0,0 13,19.5A1.5,1.5 0 0,0 14.5,21M4.14,11.5L2,9.36L5.03,6.34L7.17,8.47L4.14,11.5M19.86,11.5L16.83,8.47L18.97,6.34L22,9.36L19.86,11.5M4.14,14.22L2,16.36L5.03,19.39L7.17,17.25L4.14,14.22M19.86,14.22L16.83,17.25L18.97,19.39L22,16.36L19.86,14.22Z" /></svg>`;
+        const rewriterIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#696FC7"><path d="M9.5,3A1.5,1.5 0 0,0 8,4.5A1.5,1.5 0 0,0 9.5,6A1.5,1.5 0 0,0 11,4.5A1.5,1.5 0 0,0 9.5,3M19,13.5A1.5,1.5 0 0,0 17.5,12A1.5,1.5 0 0,0 16,13.5A1.5,1.5 0 0,0 17.5,15A1.5,1.5 0 0,0 19,13.5M19,3.5A1.5,1.5 0 0,0 17.5,2A1.5,1.5 0 0,0 16,3.5A1.5,1.5 0 0,0 17.5,5A1.5,1.5 0 0,0 19,3.5M14.5,21A1.5,1.5 0 0,0 16,19.5A1.5,1.5 0 0,0 14.5,18A1.5,1.5 0 0,0 13,19.5A1.5,1.5 0 0,0 14.5,21M4.14,11.5L2,9.36L5.03,6.34L7.17,8.47L4.14,11.5M19.86,11.5L16.83,8.47L18.97,6.34L22,9.36L19.86,11.5M4.14,14.22L2,16.36L5.03,19.39L7.17,17.25L4.14,14.22M19.86,14.22L16.83,17.25L18.97,19.39L22,16.36L19.86,14.22Z" /></svg>`;
         button.innerHTML = rewriterIconSvg;
 
         document.body.appendChild(button);
@@ -601,9 +613,33 @@ function attachRewriterButtons() {
         window.addEventListener('resize', setPosition);
         window.addEventListener('scroll', setPosition, true);
 
+        // Only show when field has non-empty content
+        const updateVisibility = () => {
+            const hasValue = (field.value || '').trim().length > 0;
+            if (!hasValue) {
+                button.style.opacity = '0';
+                button.style.display = 'none';
+            } else {
+                button.style.display = 'block';
+            }
+        };
+        updateVisibility();
+        field.addEventListener('input', () => { updateVisibility(); setPosition(); });
+        field.addEventListener('change', () => { updateVisibility(); setPosition(); });
+
         let hideTimeout;
-        const show = () => { clearTimeout(hideTimeout); button.style.opacity = '1'; };
-        const hide = () => { hideTimeout = setTimeout(() => { button.style.opacity = '0'; }, 300); };
+        const show = () => {
+            clearTimeout(hideTimeout);
+            if ((field.value || '').trim().length === 0) return;
+            button.style.display = 'block';
+            button.style.opacity = '1';
+        };
+        const hide = () => {
+            hideTimeout = setTimeout(() => {
+                button.style.opacity = '0';
+                if ((field.value || '').trim().length === 0) button.style.display = 'none';
+            }, 300);
+        };
 
         field.addEventListener('mouseenter', show);
         field.addEventListener('mouseleave', hide);
@@ -622,7 +658,9 @@ async function handleRewrite(field, button) {
     const text = field.value;
     if (!text) return;
 
-    // Simple loading indicator
+    // Show global busy overlay
+    showBusy();
+    // Subtle local affordance
     button.style.transform = 'rotate(360deg)';
     button.style.transition = 'transform 0.5s';
 
@@ -697,6 +735,7 @@ async function handleRewrite(field, button) {
     if (rewrittenText) {
         field.value = rewrittenText;
     }
+    hideBusy();
 }
 
 function removeAllRewriterButtons() {
