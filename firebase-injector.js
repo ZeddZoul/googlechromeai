@@ -118,6 +118,37 @@
           }
         }
         
+        if (event.data.action === 'SURVSAY_REWRITE_TEXT_FIREBASE') {
+            try {
+                const { text, tone, channel } = event.data;
+                console.log(`Survsay [Firebase Injector]: Received rewrite request with tone '${tone}'`);
+
+                const prompt = `
+                    Rewrite the following text in a ${tone} tone.
+                    Return only the rewritten text, and nothing else.
+
+                    Text: "${text}"
+                `;
+
+                const result = await model.generateContent(prompt);
+                const rewrittenText = result.response.text();
+                console.log('Survsay [Firebase Injector]: Firebase rewrite complete:', rewrittenText.substring(0, 100) + '...');
+
+                window.postMessage({
+                    action: 'SURVSAY_FIREBASE_REWRITE_RESULT',
+                    result: rewrittenText,
+                    channel
+                }, '*');
+            } catch (error) {
+                console.error('Survsay [Firebase Injector]: Firebase rewrite failed:', error);
+                window.postMessage({
+                    action: 'SURVSAY_FIREBASE_REWRITE_RESULT',
+                    error: error.message,
+                    channel: event.data.channel
+                }, '*');
+            }
+        }
+
         if (event.data.action === 'SURVSAY_QUERY_FIREBASE') {
           console.log('Survsay [Firebase Injector]: Received Firebase availability query');
           window.postMessage({

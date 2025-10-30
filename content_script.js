@@ -507,6 +507,156 @@ function getSurroundingText(form) {
     return contextText.trim();
 }
 
+function attachRewriterButtons() {
+    const fields = document.querySelectorAll('input[type="text"], textarea');
+
+    fields.forEach((field, index) => {
+        const buttonId = `survsay-rewriter-button-${index}`;
+        if (document.getElementById(buttonId)) return;
+
+        const button = document.createElement('button');
+        button.id = buttonId;
+        button.classList.add('survsay-rewriter-button');
+        button.style.position = 'absolute';
+        button.style.background = 'white';
+        button.style.border = '1px solid #7C3AED';
+        button.style.borderRadius = '6px';
+        button.style.padding = '2px';
+        button.style.cursor = 'pointer';
+        button.style.zIndex = '2147483645';
+        button.style.opacity = '0';
+        button.style.transition = 'opacity 0.2s ease-in-out';
+        button.style.lineHeight = '0';
+        button.title = 'Rewrite this text with Survsay';
+
+        const rewriterIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#7C3AED"><path d="M9.5,3A1.5,1.5 0 0,0 8,4.5A1.5,1.5 0 0,0 9.5,6A1.5,1.5 0 0,0 11,4.5A1.5,1.5 0 0,0 9.5,3M19,13.5A1.5,1.5 0 0,0 17.5,12A1.5,1.5 0 0,0 16,13.5A1.5,1.5 0 0,0 17.5,15A1.5,1.5 0 0,0 19,13.5M19,3.5A1.5,1.5 0 0,0 17.5,2A1.5,1.5 0 0,0 16,3.5A1.5,1.5 0 0,0 17.5,5A1.5,1.5 0 0,0 19,3.5M14.5,21A1.5,1.5 0 0,0 16,19.5A1.5,1.5 0 0,0 14.5,18A1.5,1.5 0 0,0 13,19.5A1.5,1.5 0 0,0 14.5,21M4.14,11.5L2,9.36L5.03,6.34L7.17,8.47L4.14,11.5M19.86,11.5L16.83,8.47L18.97,6.34L22,9.36L19.86,11.5M4.14,14.22L2,16.36L5.03,19.39L7.17,17.25L4.14,14.22M19.86,14.22L16.83,17.25L18.97,19.39L22,16.36L19.86,14.22Z" /></svg>`;
+        button.innerHTML = rewriterIconSvg;
+
+        document.body.appendChild(button);
+
+        const setPosition = () => {
+            const fieldRect = field.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+            if (field.tagName.toLowerCase() === 'textarea') {
+                button.style.top = `${fieldRect.bottom + scrollTop - button.offsetHeight - 8}px`;
+                button.style.left = `${fieldRect.right + scrollLeft - button.offsetWidth - 8}px`;
+            } else {
+                button.style.top = `${fieldRect.top + scrollTop + (field.offsetHeight - button.offsetHeight) / 2}px`;
+                button.style.left = `${fieldRect.right + scrollLeft + 5}px`;
+            }
+        };
+
+        button.__survsay_reposition = setPosition;
+        setPosition();
+        window.addEventListener('resize', setPosition);
+        window.addEventListener('scroll', setPosition, true);
+
+        let hideTimeout;
+        const show = () => { clearTimeout(hideTimeout); button.style.opacity = '1'; };
+        const hide = () => { hideTimeout = setTimeout(() => { button.style.opacity = '0'; }, 300); };
+
+        field.addEventListener('mouseenter', show);
+        field.addEventListener('mouseleave', hide);
+        button.addEventListener('mouseenter', show);
+        button.addEventListener('mouseleave', hide);
+
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleRewrite(field, button);
+        });
+    });
+}
+
+async function handleRewrite(field, button) {
+    const text = field.value;
+    if (!text) return;
+
+    // Simple loading indicator
+    button.style.transform = 'rotate(360deg)';
+    button.style.transition = 'transform 0.5s';
+
+    const { rewriteTone } = await new Promise(resolve => chrome.storage.sync.get({ rewriteTone: 'professional' }, resolve));
+
+    const isNanoEligible = await new Promise((resolve) => {
+        const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
+        const onEligibilityResponse = (e) => {
+            if (e.data.channel === channel) {
+                window.removeEventListener('message', onEligibilityResponse);
+                resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
+            }
+        };
+        setTimeout(() => {
+            window.removeEventListener('message', onEligibilityResponse);
+            resolve(false);
+        }, 1000);
+        window.addEventListener('message', onEligibilityResponse);
+        window.postMessage({ survsay: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
+    });
+
+    let rewrittenText = null;
+
+    if (isNanoEligible) {
+        try {
+            rewrittenText = await new Promise((resolve, reject) => {
+                const channel = `survsay_rewrite_resp_${Math.random().toString(36).slice(2)}`;
+                const onRewriteResponse = (event) => {
+                    if (event.data.channel === channel) {
+                        window.removeEventListener('message', onRewriteResponse);
+                        if (event.data.payload && event.data.payload.success) {
+                            resolve(event.data.payload.rewrittenText);
+                        } else {
+                            reject(new Error(event.data.payload ? event.data.payload.error : 'Unknown Nano rewrite error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onRewriteResponse);
+                window.postMessage({ survsay: 'REWRITE_TEXT', text, tone: rewriteTone, channel }, '*');
+            });
+        } catch (error) {
+            console.warn("Survsay: Nano rewrite failed. Falling back to Firebase.", error);
+        }
+    }
+
+    if (!rewrittenText) {
+        try {
+            rewrittenText = await new Promise((resolve, reject) => {
+                const channel = `survsay_rewrite_firebase_resp_${Math.random().toString(36).slice(2)}`;
+                const onFirebaseResponse = (e) => {
+                    if (e.data.action === 'SURVSAY_FIREBASE_REWRITE_RESULT' && e.data.channel === channel) {
+                        window.removeEventListener('message', onFirebaseResponse);
+                        if (e.data.result) {
+                            resolve(e.data.result);
+                        } else {
+                            reject(new Error(e.data.error || 'Unknown Firebase rewrite error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onFirebaseResponse);
+                window.postMessage({ action: 'SURVSAY_REWRITE_TEXT_FIREBASE', text, tone: rewriteTone, channel }, '*');
+            });
+        } catch (error) {
+            console.error("Survsay: Firebase rewrite failed.", error);
+        }
+    }
+
+    button.style.transform = 'rotate(0deg)';
+    if (rewrittenText) {
+        field.value = rewrittenText;
+    }
+}
+
+function removeAllRewriterButtons() {
+    const buttons = document.querySelectorAll('.survsay-rewriter-button');
+    buttons.forEach(button => {
+        window.removeEventListener('resize', button.__survsay_reposition);
+        window.removeEventListener('scroll', button.__survsay_reposition, true);
+        button.remove();
+    });
+}
+
 // --- Main Execution ---
 
 function injectAnimationStyles() {
@@ -529,6 +679,7 @@ function main() {
     window.__survsay_installed = true;
 
     injectAnimationStyles();
+    attachRewriterButtons();
 
     // Inject inpage.js for Nano communication
     (function injectInpage() {
@@ -546,7 +697,12 @@ function main() {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.type === 'SETTINGS_UPDATED') {
             removeAllMics();
-            if (msg.settings.micEnabled) attachMicsToForms();
+            if (msg.settings.micEnabled) {
+                attachMicsToForms();
+            }
+            // The rewriter buttons should be independent of the mic setting.
+            removeAllRewriterButtons();
+            attachRewriterButtons();
         } else if (msg.type === 'PING') {
             sendResponse({ ok: true });
         }

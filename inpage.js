@@ -189,5 +189,29 @@
         respond(channel, { success: false, error: String(err) });
       }
     }
+
+    if (ev.data.survsay === 'REWRITE_TEXT') {
+        const { text, tone, channel } = ev.data;
+        if (!channel) return;
+
+        console.log(`Survsay: Rewriting text with tone '${tone}':`, text.substring(0, 50) + '...');
+
+        try {
+            const session = await ensureSession();
+            const prompt = `
+                Rewrite the following text in a ${tone} tone.
+                Return only the rewritten text, and nothing else.
+
+                Text: "${text}"
+            `;
+
+            const result = await session.prompt(prompt);
+            console.log('Survsay: Nano rewrite result:', result);
+            respond(channel, { success: true, rewrittenText: result });
+        } catch (err) {
+            console.warn('Survsay: Nano rewrite failed:', err);
+            respond(channel, { success: false, error: String(err) });
+        }
+    }
   });
 })();
