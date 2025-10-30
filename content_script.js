@@ -27,6 +27,52 @@ let recordingState = {
     activeForm: null,
 };
 
+// --- Busy Overlay (uses brand palette) ---
+const SURVSAY_PALETTE = ['#696FC7', '#A7AAE1', '#F5D3C4', '#F2AEBB'];
+function ensureBusyUI() {
+    if (document.getElementById('survsay-busy')) return;
+    const style = document.createElement('style');
+    style.id = 'survsay-busy-style';
+    style.textContent = `
+            .survsay-hidden{display:none !important}
+            #survsay-busy{position:fixed;top:16px;right:16px;z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;background:rgba(255,255,255,0.9);backdrop-filter:saturate(120%) blur(6px);border:1px solid #e8e7f5;box-shadow:0 10px 25px rgba(0,0,0,.08)}
+            #survsay-busy .spinner{width:22px;height:22px;border-radius:50%;position:relative;overflow:hidden;animation:survsay-rotate 1.1s linear infinite}
+            #survsay-busy .spinner::before{content:'';position:absolute;inset:0;border-radius:50%;padding:2px;background:conic-gradient(${SURVSAY_PALETTE.join(',')});-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
+            #survsay-busy .dot{position:absolute;inset:4px;border-radius:50%;background:linear-gradient(135deg, ${SURVSAY_PALETTE[1]}, #fff)}
+            #survsay-busy .label{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;font-size:13px;font-weight:600;color:#3b3b55}
+            #survsay-busy .progress{height:3px;border-radius:999px;background:#f2f2f8;overflow:hidden;margin-top:6px}
+            #survsay-busy .bar{width:35%;height:100%;background:linear-gradient(90deg, ${SURVSAY_PALETTE.join(',')});border-radius:999px;animation:survsay-indet 1.4s ease-in-out infinite}
+            @keyframes survsay-rotate{to{transform:rotate(360deg)}}
+            @keyframes survsay-indet{0%{margin-left:-40%}50%{margin-left:60%}100%{margin-left:120%}}
+        `;
+    document.head.appendChild(style);
+
+    const box = document.createElement('div');
+    box.id = 'survsay-busy';
+    box.className = 'survsay-hidden';
+    box.innerHTML = `
+            <div class="spinner"><div class="dot"></div></div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:160px">
+                <div class="label">Survsay is working…</div>
+                <div class="progress"><div class="bar"></div></div>
+            </div>
+        `;
+    document.body.appendChild(box);
+}
+
+function showBusy(message) {
+    ensureBusyUI();
+    const box = document.getElementById('survsay-busy');
+    const label = box.querySelector('.label');
+    if (message) label.textContent = message;
+    box.classList.remove('survsay-hidden');
+}
+
+function hideBusy() {
+    const box = document.getElementById('survsay-busy');
+    if (box) box.classList.add('survsay-hidden');
+}
+
 function init() {
     return new Promise((resolve) => {
         chrome.storage.sync.get({ micEnabled: true }, (settings) => {
@@ -295,7 +341,7 @@ function findDivForms() {
 }
 
 async function processRecording(blob, fallbackTranscript) {
-    console.log("Survsay: Starting multi-layer transcription process...");
+    showBusy('Analyzing audio…');
 
     // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
@@ -319,7 +365,7 @@ async function processRecording(blob, fallbackTranscript) {
     if (isNanoEligible) {
         // Layer 1: Try Gemini Nano for transcription.
         try {
-            console.log("Survsay: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
+            showBusy('Transcribing on-device…');
             const base64Audio = await blobToBase64(blob);
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_nano_transcribe_${Math.random().toString(36).slice(2)}`;
@@ -338,20 +384,19 @@ async function processRecording(blob, fallbackTranscript) {
             });
 
             if (nanoResult) {
-                console.log("Survsay: Gemini Nano transcription successful (Layer 1).");
                 transcription = nanoResult;
             }
         } catch (error) {
             console.warn("Survsay: Gemini Nano transcription failed (Layer 1).", error);
         }
     } else {
-        console.log("Survsay: Gemini Nano not eligible. Proceeding to Layer 2 (Firebase).");
+        showBusy('Transcribing via cloud…');
     }
 
     // Layer 2: If Nano failed or was ineligible, try Firebase AI.
     if (!transcription) {
         try {
-            console.log("Survsay: Attempting transcription with Firebase AI (Layer 2)...");
+            showBusy('Transcribing via cloud…');
             const base64Audio = await blobToBase64(blob);
             const firebaseResult = await new Promise((resolve, reject) => {
                 const onFirebaseResponse = (e) => {
@@ -369,7 +414,6 @@ async function processRecording(blob, fallbackTranscript) {
             });
 
             if (firebaseResult) {
-                console.log("Survsay: Firebase AI transcription successful (Layer 2).");
                 transcription = firebaseResult;
             }
         } catch (error) {
@@ -379,7 +423,7 @@ async function processRecording(blob, fallbackTranscript) {
 
     // Layer 3: If all else fails, use the Web Speech API fallback.
     if (!transcription && fallbackTranscript) {
-        console.log("Survsay: Using Web Speech API transcription as fallback (Layer 3).");
+        showBusy('Using Web Speech API…');
         transcription = fallbackTranscript;
     }
 
@@ -388,6 +432,7 @@ async function processRecording(blob, fallbackTranscript) {
         await processTextWithAI(transcription, isNanoEligible);
     } else {
         console.error("Survsay: All transcription layers failed.");
+        hideBusy();
     }
 }
 
@@ -402,7 +447,7 @@ async function processTextWithAI(transcription, isNanoEligible) {
 
     if (isNanoEligible) {
         // Layer 1: Use Gemini Nano for text extraction.
-        console.log("Survsay: Processing text with Gemini Nano (Layer 1)...");
+        showBusy('Extracting fields on-device…');
         try {
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_resp_${Math.random().toString(36).slice(2)}`;
@@ -419,13 +464,14 @@ async function processTextWithAI(transcription, isNanoEligible) {
                 window.postMessage({ survsay: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
             });
             fillForm(nanoResult, recordingState.activeForm);
+            hideBusy();
         } catch (error) {
             console.warn("Survsay: Nano text processing failed (Layer 1). Now attempting Firebase fallback (Layer 2).", error);
             await processTextWithFirebase(transcription, schema, context);
         }
     } else {
         // Layer 2: Use Firebase for text extraction.
-        console.log("Survsay: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
+        showBusy('Extracting fields via cloud…');
         await processTextWithFirebase(transcription, schema, context);
     }
 }
@@ -447,8 +493,10 @@ async function processTextWithFirebase(transcription, schema, context) {
             window.postMessage({ action: 'SURVSAY_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
         });
         fillForm(firebaseResult, recordingState.activeForm);
+        hideBusy();
     } catch (error) {
         console.error("Survsay: Firebase text processing failed (Layer 2).", error);
+        hideBusy();
     }
 }
 
