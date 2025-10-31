@@ -1,22 +1,88 @@
 // popup.js - Settings management for Survsay
 document.addEventListener('DOMContentLoaded', () => {
     const micToggle = document.getElementById('floating-mic-toggle');
-    const micPosition = document.getElementById('mic-position');
-    const languageSelect = document.getElementById('transcription-language');
+    const micPositionDD = document.getElementById('mic-position');
+    const languageDD = document.getElementById('transcription-language');
+    const rewriteToneDD = document.getElementById('rewrite-tone');
+    const rewriteLengthDD = document.getElementById('rewrite-length');
     const resetButton = document.getElementById('reset-settings');
 
     const DEFAULTS = {
         micEnabled: true,
         micPosition: 'top-right',
-        language: 'en-US'
+        busyPosition: 'top-right',
+        language: 'en-US',
+        rewriteTone: 'original',
+        rewriteLength: 'original'
     };
+
+    // --- Dropdown helpers ---
+    function getDropdownValue(id) {
+        const el = document.getElementById(id);
+        return el?.dataset.value || '';
+    }
+
+    function setDropdownValue(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const items = el.querySelectorAll('.dropdown-item');
+        let labelText = '';
+        items.forEach(it => {
+            const isSelected = it.getAttribute('data-value') === value;
+            it.classList.toggle('selected', isSelected);
+            if (isSelected) labelText = it.textContent.trim();
+        });
+        if (labelText) {
+            el.dataset.value = value;
+            const label = el.querySelector('.dropdown-label');
+            if (label) label.textContent = labelText;
+        }
+    }
+
+    function wireDropdown(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const trigger = el.querySelector('.dropdown-trigger');
+        const menu = el.querySelector('.dropdown-menu');
+        if (!trigger || !menu) return;
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = el.classList.toggle('open');
+            trigger.setAttribute('aria-expanded', String(isOpen));
+        });
+
+        el.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const value = item.getAttribute('data-value');
+                setDropdownValue(id, value);
+                el.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+    }
+
+    function closeAllDropdowns() {
+        document.querySelectorAll('.dropdown.open').forEach(dd => {
+            dd.classList.remove('open');
+            const trg = dd.querySelector('.dropdown-trigger');
+            if (trg) trg.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    document.addEventListener('click', closeAllDropdowns);
 
     // Load settings from storage and update the UI
     function loadSettings() {
         chrome.storage.sync.get(DEFAULTS, (settings) => {
             micToggle.checked = settings.micEnabled;
-            micPosition.value = settings.micPosition;
-            languageSelect.value = settings.language;
+            setDropdownValue('mic-position', settings.micPosition);
+            setDropdownValue('busy-position', settings.busyPosition);
+            setDropdownValue('transcription-language', settings.language);
+            setDropdownValue('rewrite-tone', settings.rewriteTone);
+            setDropdownValue('rewrite-length', settings.rewriteLength);
         });
     }
 
@@ -24,8 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveSettings() {
         const settings = {
             micEnabled: micToggle.checked,
-            micPosition: micPosition.value,
-            language: languageSelect.value
+            micPosition: getDropdownValue('mic-position'),
+            busyPosition: getDropdownValue('busy-position'),
+            language: getDropdownValue('transcription-language'),
+            rewriteTone: getDropdownValue('rewrite-tone'),
+            rewriteLength: getDropdownValue('rewrite-length')
         };
         chrome.storage.sync.set(settings, () => {
             console.log('Survsay: Settings saved.');
@@ -53,8 +122,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add event listeners
     micToggle.addEventListener('change', saveSettings);
-    micPosition.addEventListener('change', saveSettings);
-    languageSelect.addEventListener('change', saveSettings);
+    wireDropdown('mic-position');
+    wireDropdown('busy-position');
+    wireDropdown('transcription-language');
+    wireDropdown('rewrite-tone');
+    wireDropdown('rewrite-length');
+    micPositionDD.addEventListener('change', saveSettings);
+    const busyPositionDD = document.getElementById('busy-position');
+    if (busyPositionDD) busyPositionDD.addEventListener('change', saveSettings);
+    languageDD.addEventListener('change', saveSettings);
+    rewriteToneDD.addEventListener('change', saveSettings);
+    rewriteLengthDD.addEventListener('change', saveSettings);
     resetButton.addEventListener('click', resetSettings);
 
     // Listen for CSP block messages from the content script

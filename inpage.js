@@ -73,7 +73,7 @@
           const availability = await LanguageModel.availability(modelCapabilities);
           isAvailable = availability !== 'unavailable';
           console.log('Survsay: LanguageModel availability:', availability);
-          
+
           // If available, create session for form extraction (Layer 1)
           if (isAvailable) {
             try {
@@ -186,6 +186,42 @@
       } catch (err) {
         console.warn('Survsay: Nano extraction failed (Layer 1 will fallback to Firebase):', err);
         // Return failure - content_script will use Firebase fallback (Layer 2)
+        respond(channel, { success: false, error: String(err) });
+      }
+    }
+
+    if (ev.data.survsay === 'REWRITE_TEXT') {
+      const { text, tone, length, context, channel } = ev.data;
+      if (!channel) return;
+
+      console.log(`Survsay: Rewriting text with tone '${tone}' and length '${length}':`, text.substring(0, 50) + '...');
+
+      try {
+        const session = await ensureSession();
+
+        let lengthInstruction = '';
+        if (length === 'shorter') {
+          lengthInstruction = ' Make the text shorter.';
+        } else if (length === 'longer') {
+          lengthInstruction = ' Make the text longer.';
+        }
+
+        let contextHint = '';
+        if (context && context.instructions) {
+          contextHint = ' IMPORTANT: ' + context.instructions;
+        }
+
+        const prompt = 'Rewrite the following text in a ' + tone + ' tone.' +
+          lengthInstruction +
+          contextHint +
+          ' Return only the rewritten text, and nothing else.' +
+          '\n\nText: "' + text + '"';
+
+        const result = await session.prompt(prompt);
+        console.log('Survsay: Nano rewrite result:', result);
+        respond(channel, { success: true, rewrittenText: result });
+      } catch (err) {
+        console.warn('Survsay: Nano rewrite failed:', err);
         respond(channel, { success: false, error: String(err) });
       }
     }

@@ -27,6 +27,70 @@ let recordingState = {
     activeForm: null,
 };
 
+// --- Busy Overlay (uses brand palette) ---
+const SURVSAY_PALETTE = ['#696FC7', '#A7AAE1', '#F5D3C4', '#F2AEBB'];
+
+function ensureBusyUI() {
+    return new Promise((resolve) => {
+        if (document.getElementById('survsay-busy')) {
+            resolve();
+            return;
+        }
+
+        // Get position from settings
+        chrome.storage.sync.get({ busyPosition: 'top-right' }, (settings) => {
+            const pos = settings.busyPosition || 'top-right';
+            let positionStyles = '';
+            if (pos === 'top-right') positionStyles = 'top:16px;right:16px;';
+            else if (pos === 'top-left') positionStyles = 'top:16px;left:16px;';
+            else if (pos === 'bottom-right') positionStyles = 'bottom:16px;right:16px;';
+            else if (pos === 'bottom-left') positionStyles = 'bottom:16px;left:16px;';
+
+            const style = document.createElement('style');
+            style.id = 'survsay-busy-style';
+            style.textContent = `
+            .survsay-hidden{display:none !important}
+            #survsay-busy{position:fixed;${positionStyles}z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;background:rgba(255,255,255,0.9);backdrop-filter:saturate(120%) blur(6px);border:1px solid #e8e7f5;box-shadow:0 10px 25px rgba(0,0,0,.08)}
+            #survsay-busy .spinner{width:22px;height:22px;border-radius:50%;position:relative;overflow:hidden;animation:survsay-rotate 1.1s linear infinite}
+            #survsay-busy .spinner::before{content:'';position:absolute;inset:0;border-radius:50%;padding:2px;background:conic-gradient(${SURVSAY_PALETTE.join(',')});-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;}
+            #survsay-busy .dot{position:absolute;inset:4px;border-radius:50%;background:linear-gradient(135deg, ${SURVSAY_PALETTE[1]}, #fff)}
+            #survsay-busy .label{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;font-size:13px;font-weight:600;color:#3b3b55}
+            #survsay-busy .progress{height:3px;border-radius:999px;background:#f2f2f8;overflow:hidden;margin-top:6px}
+            #survsay-busy .bar{width:35%;height:100%;background:linear-gradient(90deg, ${SURVSAY_PALETTE.join(',')});border-radius:999px;animation:survsay-indet 1.4s ease-in-out infinite}
+            @keyframes survsay-rotate{to{transform:rotate(360deg)}}
+            @keyframes survsay-indet{0%{margin-left:-40%}50%{margin-left:60%}100%{margin-left:120%}}
+        `;
+            document.head.appendChild(style);
+
+            const box = document.createElement('div');
+            box.id = 'survsay-busy';
+            box.className = 'survsay-hidden';
+            box.innerHTML = `
+            <div class="spinner"><div class="dot"></div></div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:160px">
+                <div class="label">Survsay is filling your form…</div>
+                <div class="progress"><div class="bar"></div></div>
+            </div>
+        `;
+            document.body.appendChild(box);
+            resolve();
+        });
+    });
+}
+
+async function showBusy(message) {
+    await ensureBusyUI();
+    const box = document.getElementById('survsay-busy');
+    const label = box.querySelector('.label');
+    label.textContent = message || 'Survsay is filling your form…';
+    box.classList.remove('survsay-hidden');
+}
+
+function hideBusy() {
+    const box = document.getElementById('survsay-busy');
+    if (box) box.classList.add('survsay-hidden');
+}
+
 function init() {
     return new Promise((resolve) => {
         chrome.storage.sync.get({ micEnabled: true }, (settings) => {
@@ -75,7 +139,7 @@ function attachMicsToForms() {
         el.style.position = 'absolute';
         el.style.background = 'white';
         el.style.color = 'black';
-        el.style.border = '1px solid #7C3AED';
+        el.style.border = '1px solid #696FC7';
         el.style.borderRadius = '8px';
         el.style.padding = '2px 6px';
         el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
@@ -90,10 +154,18 @@ function attachMicsToForms() {
         el.style.transition = 'all 0.2s ease-in-out';
         el.style.opacity = '0';
         el.style.transform = 'translateY(5px)';
-        el.title = 'Survsay - Click to fill this form with your voice';
 
-        const micIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#7C3AED"/><path d="M19 11a1 1 0 0 1-2 0 5 5 0 0 1-10 0 1 1 0 0 1-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z" fill="#7C3AED" opacity="0.9"/></svg>`;
-        el.innerHTML = `${micIconSvg}<span>fill this form with survsay</span>`;
+        // Detect if this form behaves like a search bar
+        const isSearchForm = (
+            form.matches('[role="search"]') ||
+            form.closest('[role="search"]') ||
+            !!form.querySelector('input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i], input[name="q" i], input[name*="search" i]')
+        );
+        el.dataset.survsayContext = isSearchForm ? 'search' : 'form';
+        el.title = isSearchForm ? 'Search with Survsay' : 'Fill this form with Survsay';
+
+        const logoImg = `<img src="${chrome.runtime.getURL('logo.PNG')}" alt="Survsay" style="width:14px;height:14px;object-fit:contain;border-radius:3px;" />`;
+        el.innerHTML = `${logoImg}`;
 
         document.body.appendChild(el); // Append to body to avoid form layout issues
 
@@ -231,9 +303,9 @@ async function handleStartRecording(el, form) {
         el.classList.add('survsay-recording-pulse');
         el.style.background = '#DC2626'; // Red background for recording
         el.style.color = 'white';
-        el.querySelector('span').textContent = 'stop recording';
-        // Make sure all SVG paths turn white
-        el.querySelectorAll('svg path').forEach(p => p.style.fill = 'white');
+        // Update title to reflect stop action
+        el.title = 'Survsay - Click to stop recording';
+        // Visual cue handled via background color; logo remains unchanged
     } catch (err) {
         console.error('Survsay: Failed to start recording:', err);
         cleanupAudioResources();
@@ -250,9 +322,11 @@ async function handleStopRecording(el) {
     el.classList.remove('survsay-recording-pulse');
     el.style.background = 'white'; // Back to original white
     el.style.color = 'black';
-    el.querySelector('span').textContent = 'fill this form with survsay';
-    // And all SVG paths back to purple
-    el.querySelectorAll('svg path').forEach(p => p.style.fill = '#7C3AED');
+    // Restore title based on context (search vs form)
+    el.title = (el.dataset && el.dataset.survsayContext === 'search') ? 'Search with Survsay' : 'Fill this form with Survsay';
+    // Reset to original content (logo only)
+    const logoImg = `<img src="${chrome.runtime.getURL('logo.PNG')}" alt="Survsay" style="width:14px;height:14px;object-fit:contain;border-radius:3px;" />`;
+    el.innerHTML = `${logoImg}`;
     recordingState.isStopping = false;
 }
 
@@ -295,7 +369,7 @@ function findDivForms() {
 }
 
 async function processRecording(blob, fallbackTranscript) {
-    console.log("Survsay: Starting multi-layer transcription process...");
+    showBusy();
 
     // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
@@ -319,7 +393,7 @@ async function processRecording(blob, fallbackTranscript) {
     if (isNanoEligible) {
         // Layer 1: Try Gemini Nano for transcription.
         try {
-            console.log("Survsay: Device is eligible. Attempting transcription with Gemini Nano (Layer 1)...");
+            showBusy();
             const base64Audio = await blobToBase64(blob);
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_nano_transcribe_${Math.random().toString(36).slice(2)}`;
@@ -338,20 +412,19 @@ async function processRecording(blob, fallbackTranscript) {
             });
 
             if (nanoResult) {
-                console.log("Survsay: Gemini Nano transcription successful (Layer 1).");
                 transcription = nanoResult;
             }
         } catch (error) {
             console.warn("Survsay: Gemini Nano transcription failed (Layer 1).", error);
         }
     } else {
-        console.log("Survsay: Gemini Nano not eligible. Proceeding to Layer 2 (Firebase).");
+        showBusy();
     }
 
     // Layer 2: If Nano failed or was ineligible, try Firebase AI.
     if (!transcription) {
         try {
-            console.log("Survsay: Attempting transcription with Firebase AI (Layer 2)...");
+            showBusy();
             const base64Audio = await blobToBase64(blob);
             const firebaseResult = await new Promise((resolve, reject) => {
                 const onFirebaseResponse = (e) => {
@@ -369,7 +442,6 @@ async function processRecording(blob, fallbackTranscript) {
             });
 
             if (firebaseResult) {
-                console.log("Survsay: Firebase AI transcription successful (Layer 2).");
                 transcription = firebaseResult;
             }
         } catch (error) {
@@ -379,7 +451,7 @@ async function processRecording(blob, fallbackTranscript) {
 
     // Layer 3: If all else fails, use the Web Speech API fallback.
     if (!transcription && fallbackTranscript) {
-        console.log("Survsay: Using Web Speech API transcription as fallback (Layer 3).");
+        showBusy();
         transcription = fallbackTranscript;
     }
 
@@ -388,6 +460,7 @@ async function processRecording(blob, fallbackTranscript) {
         await processTextWithAI(transcription, isNanoEligible);
     } else {
         console.error("Survsay: All transcription layers failed.");
+        hideBusy();
     }
 }
 
@@ -402,7 +475,7 @@ async function processTextWithAI(transcription, isNanoEligible) {
 
     if (isNanoEligible) {
         // Layer 1: Use Gemini Nano for text extraction.
-        console.log("Survsay: Processing text with Gemini Nano (Layer 1)...");
+        showBusy();
         try {
             const nanoResult = await new Promise((resolve, reject) => {
                 const channel = `survsay_resp_${Math.random().toString(36).slice(2)}`;
@@ -419,13 +492,14 @@ async function processTextWithAI(transcription, isNanoEligible) {
                 window.postMessage({ survsay: 'PROCESS_TEXT_INPAGE', text: transcription, schema, context, channel }, '*');
             });
             fillForm(nanoResult, recordingState.activeForm);
+            hideBusy();
         } catch (error) {
             console.warn("Survsay: Nano text processing failed (Layer 1). Now attempting Firebase fallback (Layer 2).", error);
             await processTextWithFirebase(transcription, schema, context);
         }
     } else {
         // Layer 2: Use Firebase for text extraction.
-        console.log("Survsay: Nano not eligible for text processing. Using Firebase AI (Layer 2)...");
+        showBusy();
         await processTextWithFirebase(transcription, schema, context);
     }
 }
@@ -447,8 +521,10 @@ async function processTextWithFirebase(transcription, schema, context) {
             window.postMessage({ action: 'SURVSAY_PROCESS_TEXT_FIREBASE', text: transcription, schema, context }, '*');
         });
         fillForm(firebaseResult, recordingState.activeForm);
+        hideBusy();
     } catch (error) {
         console.error("Survsay: Firebase text processing failed (Layer 2).", error);
+        hideBusy();
     }
 }
 
@@ -507,6 +583,455 @@ function getSurroundingText(form) {
     return contextText.trim();
 }
 
+function attachRewriterButtons() {
+    const fields = document.querySelectorAll('input[type="text"], textarea');
+
+    fields.forEach((field, index) => {
+        const buttonId = `survsay-rewriter-button-${index}`;
+        if (document.getElementById(buttonId)) return;
+
+        const button = document.createElement('button');
+        button.id = buttonId;
+        button.classList.add('survsay-rewriter-button');
+        button.style.position = 'absolute';
+        button.style.background = 'white';
+        button.style.border = '1px solid #696FC7';
+        button.style.borderRadius = '6px';
+        button.style.padding = '2px';
+        button.style.cursor = 'pointer';
+        button.style.zIndex = '2147483645';
+        button.style.opacity = '0';
+        button.style.transition = 'opacity 0.2s ease-in-out';
+        button.style.lineHeight = '0';
+        button.title = 'Rewrite this text with Survsay';
+
+        const rewriterIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#696FC7"><path d="M9.5,3A1.5,1.5 0 0,0 8,4.5A1.5,1.5 0 0,0 9.5,6A1.5,1.5 0 0,0 11,4.5A1.5,1.5 0 0,0 9.5,3M19,13.5A1.5,1.5 0 0,0 17.5,12A1.5,1.5 0 0,0 16,13.5A1.5,1.5 0 0,0 17.5,15A1.5,1.5 0 0,0 19,13.5M19,3.5A1.5,1.5 0 0,0 17.5,2A1.5,1.5 0 0,0 16,3.5A1.5,1.5 0 0,0 17.5,5A1.5,1.5 0 0,0 19,3.5M14.5,21A1.5,1.5 0 0,0 16,19.5A1.5,1.5 0 0,0 14.5,18A1.5,1.5 0 0,0 13,19.5A1.5,1.5 0 0,0 14.5,21M4.14,11.5L2,9.36L5.03,6.34L7.17,8.47L4.14,11.5M19.86,11.5L16.83,8.47L18.97,6.34L22,9.36L19.86,11.5M4.14,14.22L2,16.36L5.03,19.39L7.17,17.25L4.14,14.22M19.86,14.22L16.83,17.25L18.97,19.39L22,16.36L19.86,14.22Z" /></svg>`;
+        button.innerHTML = rewriterIconSvg;
+
+        document.body.appendChild(button);
+
+        const setPosition = () => {
+            const fieldRect = field.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+            if (field.tagName.toLowerCase() === 'textarea') {
+                button.style.top = `${fieldRect.bottom + scrollTop - button.offsetHeight - 8}px`;
+                button.style.left = `${fieldRect.right + scrollLeft - button.offsetWidth - 8}px`;
+            } else {
+                button.style.top = `${fieldRect.top + scrollTop + (field.offsetHeight - button.offsetHeight) / 2}px`;
+                button.style.left = `${fieldRect.right + scrollLeft + 5}px`;
+            }
+        };
+
+        button.__survsay_reposition = setPosition;
+        setPosition();
+        window.addEventListener('resize', setPosition);
+        window.addEventListener('scroll', setPosition, true);
+
+        // Only show when field has non-empty content
+        const updateVisibility = () => {
+            const hasValue = (field.value || '').trim().length > 0;
+            if (!hasValue) {
+                button.style.opacity = '0';
+                button.style.display = 'none';
+            } else {
+                button.style.display = 'block';
+            }
+        };
+        updateVisibility();
+        field.addEventListener('input', () => { updateVisibility(); setPosition(); });
+        field.addEventListener('change', () => { updateVisibility(); setPosition(); });
+
+        let hideTimeout;
+        const show = () => {
+            clearTimeout(hideTimeout);
+            if ((field.value || '').trim().length === 0) return;
+            button.style.display = 'block';
+            button.style.opacity = '1';
+        };
+        const hide = () => {
+            hideTimeout = setTimeout(() => {
+                button.style.opacity = '0';
+                if ((field.value || '').trim().length === 0) button.style.display = 'none';
+            }, 300);
+        };
+
+        field.addEventListener('mouseenter', show);
+        field.addEventListener('mouseleave', hide);
+        button.addEventListener('mouseenter', show);
+        button.addEventListener('mouseleave', hide);
+
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleRewrite(field, button);
+        });
+    });
+}
+
+// Gather context about a field to improve rewriting
+function getFieldContext(field) {
+    const context = {
+        label: '',
+        placeholder: field.placeholder || '',
+        type: field.type || 'text',
+        name: field.name || '',
+        id: field.id || '',
+        hasNumbers: /\d/.test(field.value),
+        hasProperNouns: false,
+        isNameField: false,
+        isEmailField: false,
+        isPhoneField: false,
+        isIdField: false,
+        isUrlField: false,
+        isDateField: false,
+        isAddressField: false,
+        instructions: ''
+    };
+
+    // Try to find associated label
+    if (field.id) {
+        const label = document.querySelector(`label[for="${field.id}"]`);
+        if (label) context.label = label.textContent.trim();
+    }
+    if (!context.label) {
+        const parent = field.closest('label');
+        if (parent) context.label = parent.textContent.replace(field.value, '').trim();
+    }
+    if (!context.label) {
+        const prevLabel = field.previousElementSibling;
+        if (prevLabel && (prevLabel.tagName === 'LABEL' || prevLabel.classList.contains('label'))) {
+            context.label = prevLabel.textContent.trim();
+        }
+    }
+
+    // Detect if field is for names (first name, last name, full name, etc.)
+    const meta = `${context.label} ${context.placeholder} ${context.name} ${context.id}`.toLowerCase();
+
+    // Name fields
+    const namePatterns = /(\bname\b|\bfirst\b|\blast\b|\bsurname\b|\bgiven\b|full\s*-?\s*name|user\s*-?\s*name|username)/i;
+    const isNameField = namePatterns.test(meta);
+    context.isNameField = isNameField;
+
+    // Email fields
+    const emailPatterns = /(e[-\s]?mail|\bemail\b)/i;
+    context.isEmailField = emailPatterns.test(meta) || context.type === 'email';
+
+    // Phone fields
+    const phonePatterns = /(phone|mobile|telephone|tel\b|cell\b|whatsapp|contact\s*number|phone\s*number)/i;
+    context.isPhoneField = phonePatterns.test(meta) || context.type === 'tel';
+
+    // ID fields (employee id, student id, account number, national id, ssn, passport, etc.)
+    const idPatterns = /(employee|student|tax|account|national|passport|driver|applicant|customer|user)\s*(id|number|no\.?|#)\b|\b(id\s*number|id#|id no\.?|ssn|nin|nid|pan|aadhaar|aadhar|dni|cedula|rfc|curp|nif)\b/i;
+    context.isIdField = idPatterns.test(meta);
+
+    // URL fields
+    const urlPatterns = /(url|website|web\s*site|link|homepage|home\s*page|portfolio)/i;
+    context.isUrlField = urlPatterns.test(meta) || context.type === 'url';
+
+    // Date/time fields
+    const datePatterns = /(date|dob|birth\s*date|birthday|start\s*date|end\s*date|expiry|expiration|exp\s*date|mm\/?yy(?:yy)?|yy(?:yy)?)/i;
+    const dateTypes = ['date', 'datetime-local', 'month', 'time', 'week'];
+    context.isDateField = datePatterns.test(meta) || dateTypes.includes(context.type);
+
+    // Address fields previously blocked; now we let AI + masking preserve them. Keep detection for instruction hints only.
+    const addressPatterns = /(address|street|st\.?\b|avenue|ave\.?\b|road|rd\.?\b|boulevard|blvd\.?\b|lane|ln\.?\b|drive|dr\.?\b|court|ct\.?\b|place|pl\.?\b|square|sq\.?\b|trail|trl\.?\b|parkway|pkwy\.?\b|circle|cir\.?\b|city|state|province|region|county|zip|postal|postcode|country|apt|apartment|suite|ste\.?\b|unit|building|bldg)/i;
+    context.isAddressField = addressPatterns.test(meta);
+
+    // Detect if field contains capitalized words (likely proper nouns)
+    const words = field.value.split(/\s+/);
+    context.hasProperNouns = words.some(word =>
+        word.length > 1 && word[0] === word[0].toUpperCase() && word.slice(1) === word.slice(1).toLowerCase()
+    );
+
+    // Build context instructions for the AI
+    const hints = [];
+    if (isNameField || context.hasProperNouns) {
+        hints.push("Do NOT change any names or proper nouns");
+    }
+    if (context.hasNumbers) {
+        hints.push("Do NOT change any numbers");
+    }
+    if (context.isEmailField) {
+        hints.push("Do NOT change any email addresses");
+    }
+    if (context.isPhoneField) {
+        hints.push("Do NOT change any phone numbers");
+    }
+    if (context.isIdField) {
+        hints.push("Do NOT change any IDs or identification numbers");
+    }
+    if (context.isUrlField) {
+        hints.push("Do NOT change any URLs or links");
+    }
+    if (context.isDateField) {
+        hints.push("Do NOT change any dates or date formats");
+    }
+    // Currency and percentages guidance (applies when present in text)
+    if (/[€£¥₹$]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD)\b/.test(field.value)) {
+        hints.push("Do NOT change any currency amounts");
+    }
+    if (/\d+\s*%|\bpercent\b/i.test(field.value)) {
+        hints.push("Do NOT change any percentages");
+    }
+    if (context.isAddressField) {
+        hints.push("Do NOT change any postal addresses");
+    }
+    if (context.label) {
+        hints.push(`This is for: "${context.label}"`);
+    } else if (context.placeholder) {
+        hints.push(`Placeholder: "${context.placeholder}"`);
+    }
+
+    context.instructions = hints.length > 0 ? hints.join('. ') + '.' : '';
+    return context;
+}
+
+// Replace sensitive substrings with placeholders so the rewriter preserves them
+function maskSensitiveSubstrings(text) {
+    let tokens = [];
+    let idxEmail = 0, idxPhone = 0, idxId = 0, idxUrl = 0, idxDate = 0, idxCurr = 0, idxPct = 0, idxAddr = 0;
+    let out = text;
+
+    // URLs (http/https/www or common domain forms)
+    const urlRe = /(https?:\/\/[^\s)]+|www\.[^\s)]+|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[\w#?&=+%\-.]*)?)/gi;
+    out = out.replace(urlRe, (m) => {
+        const ph = `__SURVSAY_URL_${++idxUrl}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Emails
+    const emailRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+    out = out.replace(emailRe, (m) => {
+        const ph = `__SURVSAY_EMAIL_${++idxEmail}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Phone numbers (7-15 digits total, allow separators)
+    const phoneRe = /\+?\d[\d\s().-]{5,}\d/g;
+    out = out.replace(phoneRe, (m) => {
+        // Heuristic: ensure at least 7 digits
+        const digits = (m.match(/\d/g) || []).length;
+        if (digits < 7 || digits > 15) return m;
+        const ph = `__SURVSAY_PHONE_${++idxPhone}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Generic IDs (common keywords, then token)
+    const idRe = /(\b(?:ssn|nin|nid|pan|aadhaar|aadhar|dni|cedula|curp|rfc|nif|passport|driver'?s?\s?license|account(?:\s*number)?|customer\s*id|user\s*id|employee\s*id|student\s*id|national\s*id)\b[^\n\r\t]*)?\b([A-Za-z0-9][A-Za-z0-9\-]{3,})\b/gim;
+    out = out.replace(idRe, (m) => {
+        // Avoid replacing if it already contains a placeholder
+        if (/__SURVSAY_(EMAIL|PHONE|ID)_\d+__/.test(m)) return m;
+        // Avoid obvious words-only tokens
+        if (/^[A-Za-z]{1,}$/.test(m)) return m;
+        const ph = `__SURVSAY_ID_${++idxId}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Dates
+    const datePatterns = [
+        /\b\d{4}-\d{2}-\d{2}\b/g,                         // YYYY-MM-DD
+        /\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})\b/g,  // 12/31/2025 or 31-12-25
+        /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s*\d{4})?\b/gi, // Month 12, 2025
+        /\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/gi
+    ];
+    datePatterns.forEach(re => {
+        out = out.replace(re, (m) => {
+            const ph = `__SURVSAY_DATE_${++idxDate}__`;
+            tokens.push({ placeholder: ph, value: m });
+            return ph;
+        });
+    });
+
+    // Currency amounts (symbol/code before or after number)
+    const currBefore = /(?<!\w)(?:[$€£¥₹]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD)\b)\s?\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{2})?/gi;
+    out = out.replace(currBefore, (m) => {
+        const ph = `__SURVSAY_CURR_${++idxCurr}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+    const currAfter = /\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{2})?\s?(?:[$€£¥₹]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD)\b)/gi;
+    out = out.replace(currAfter, (m) => {
+        const ph = `__SURVSAY_CURR_${++idxCurr}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Percentages
+    const pctRe1 = /\b\d+(?:[.,]\d+)?\s*%\b/g;
+    out = out.replace(pctRe1, (m) => {
+        const ph = `__SURVSAY_PCT_${++idxPct}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+    const pctRe2 = /\b\d+(?:[.,]\d+)?\s*(?:percent|per\s*cent)\b/gi;
+    out = out.replace(pctRe2, (m) => {
+        const ph = `__SURVSAY_PCT_${++idxPct}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    // Postal addresses: number + street word
+    const addrStreetWords = '(Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Court|Ct\.?|Place|Pl\.?|Square|Sq\.?|Trail|Trl\.?|Parkway|Pkwy\.?|Circle|Cir\.?)';
+    const addrRe = new RegExp(`\\b\\d{1,6}\\s+[A-Za-z0-9.'\\-]+\\s+${addrStreetWords}(?:\\s+(?:Apt|Apartment|Unit|Suite|Ste\.?|#)\\s*[^,\n]+)?`, 'gi');
+    out = out.replace(addrRe, (m) => {
+        const ph = `__SURVSAY_ADDR_${++idxAddr}__`;
+        tokens.push({ placeholder: ph, value: m });
+        return ph;
+    });
+
+    return { sanitizedText: out, tokens };
+}
+
+function unmaskSensitiveSubstrings(text, tokens) {
+    let out = text;
+    tokens.forEach(t => {
+        out = out.replaceAll(t.placeholder, t.value);
+    });
+    return out;
+}
+
+// Heuristic: return true when the content is essentially just URLs with little/no extra text
+function isLikelyUrlOnlyContent(text) {
+    if (!text) return false;
+    const urlRe = /(https?:\/\/[^\s)]+|www\.[^\s)]+|\b[a-z0-9.-]+\.[a-z]{2,}(?:\/[\w#?&=+%\-.]*)?)/gi;
+    const withoutUrls = text.replace(urlRe, ' ').replace(/[\s,;|:()\-_/]+/g, '').trim();
+    // If after removing URLs and common separators there's almost nothing left, treat as URL-only
+    return withoutUrls.length < 3;
+}
+
+async function handleRewrite(field, button) {
+    const text = field.value;
+    if (!text) return;
+
+    // Gather context about this field
+    const fieldContext = getFieldContext(field);
+
+    // Minimal logging only on critical failures (verbose logs removed)
+
+    // If this is a protected field (names, emails, phones, IDs), do not rewrite
+    if (
+        fieldContext.isNameField ||
+        fieldContext.isEmailField ||
+        fieldContext.isPhoneField ||
+        fieldContext.isIdField ||
+        fieldContext.isDateField ||
+        /* Allow address fields to go through; AI and masking will preserve them */
+        field.type === 'url'
+    ) {
+        // no-op: keep original text
+        button.style.transform = 'rotate(0deg)';
+        return;
+    }
+
+    // Show global busy overlay
+    showBusy();
+    // Subtle local affordance
+    button.style.transform = 'rotate(360deg)';
+    button.style.transition = 'transform 0.5s';
+
+    const settings = await new Promise(resolve => {
+        chrome.storage.sync.get({ rewriteTone: 'original', rewriteLength: 'original' }, resolve);
+    });
+    const { rewriteTone, rewriteLength } = settings;
+
+    // Mask sensitive data inside free text so the rewriter preserves them
+    const { sanitizedText, tokens } = maskSensitiveSubstrings(text);
+    // Masking done; proceed
+
+    const isNanoEligible = await new Promise((resolve) => {
+        const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
+        const onEligibilityResponse = (e) => {
+            if (e.data.channel === channel) {
+                window.removeEventListener('message', onEligibilityResponse);
+                resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
+            }
+        };
+        setTimeout(() => {
+            window.removeEventListener('message', onEligibilityResponse);
+            resolve(false);
+        }, 1000);
+        window.addEventListener('message', onEligibilityResponse);
+        window.postMessage({ survsay: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
+    });
+
+    let rewrittenText = null;
+
+    if (isNanoEligible) {
+        try {
+            rewrittenText = await new Promise((resolve, reject) => {
+                const channel = `survsay_rewrite_resp_${Math.random().toString(36).slice(2)}`;
+                const onRewriteResponse = (event) => {
+                    if (event.data.channel === channel) {
+                        window.removeEventListener('message', onRewriteResponse);
+                        if (event.data.payload && event.data.payload.success) {
+                            resolve(event.data.payload.rewrittenText);
+                        } else {
+                            reject(new Error(event.data.payload ? event.data.payload.error : 'Unknown Nano rewrite error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onRewriteResponse);
+                window.postMessage({ survsay: 'REWRITE_TEXT', text: sanitizedText, tone: rewriteTone, length: rewriteLength, context: fieldContext, channel }, '*');
+            });
+        } catch (error) {
+            // Silent fallback to Firebase
+        }
+    }
+
+    if (!rewrittenText) {
+        try {
+            const firebasePromise = new Promise((resolve, reject) => {
+                const channel = `survsay_rewrite_firebase_resp_${Math.random().toString(36).slice(2)}`;
+                const onFirebaseResponse = (e) => {
+                    if (e.data.action === 'SURVSAY_FIREBASE_REWRITE_RESULT' && e.data.channel === channel) {
+                        window.removeEventListener('message', onFirebaseResponse);
+                        if (e.data.result) {
+                            resolve(e.data.result);
+                        } else {
+                            reject(new Error(e.data.error || 'Unknown Firebase rewrite error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onFirebaseResponse);
+                window.postMessage({ action: 'SURVSAY_REWRITE_TEXT_FIREBASE', text: sanitizedText, tone: rewriteTone, length: rewriteLength, context: fieldContext, channel }, '*');
+            });
+            // Add a timeout so we don't hang forever if something goes wrong
+            const timeoutMs = 15000;
+            rewrittenText = await Promise.race([
+                firebasePromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase rewrite timeout after ' + timeoutMs + 'ms')), timeoutMs))
+            ]);
+        } catch (error) {
+            console.error("Survsay: Firebase rewrite failed.", error);
+        }
+    }
+
+    button.style.transform = 'rotate(0deg)';
+    if (rewrittenText) {
+        // Restore sensitive substrings
+        const restored = unmaskSensitiveSubstrings(rewrittenText, tokens);
+        field.value = restored;
+    } else {
+        // No output; remain silent
+    }
+    hideBusy();
+}
+
+function removeAllRewriterButtons() {
+    const buttons = document.querySelectorAll('.survsay-rewriter-button');
+    buttons.forEach(button => {
+        window.removeEventListener('resize', button.__survsay_reposition);
+        window.removeEventListener('scroll', button.__survsay_reposition, true);
+        button.remove();
+    });
+}
+
 // --- Main Execution ---
 
 function injectAnimationStyles() {
@@ -529,6 +1054,7 @@ function main() {
     window.__survsay_installed = true;
 
     injectAnimationStyles();
+    attachRewriterButtons();
 
     // Inject inpage.js for Nano communication
     (function injectInpage() {
@@ -546,7 +1072,12 @@ function main() {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.type === 'SETTINGS_UPDATED') {
             removeAllMics();
-            if (msg.settings.micEnabled) attachMicsToForms();
+            if (msg.settings.micEnabled) {
+                attachMicsToForms();
+            }
+            // The rewriter buttons should be independent of the mic setting.
+            removeAllRewriterButtons();
+            attachRewriterButtons();
         } else if (msg.type === 'PING') {
             sendResponse({ ok: true });
         }

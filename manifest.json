@@ -3,6 +3,12 @@
   "name": "Survsay",
   "description": "Fill forms with your voice. Powered by on-device AI.",
   "version": "0.1.0",
+  "icons": {
+    "16": "logo.PNG",
+    "32": "logo.PNG",
+    "48": "logo.PNG",
+    "128": "logo.PNG"
+  },
   "permissions": ["storage", "scripting", "activeTab", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -11,7 +17,12 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Survsay"
+    "default_title": "Survsay",
+    "default_icon": {
+      "16": "logo.PNG",
+      "32": "logo.PNG",
+      "48": "logo.PNG"
+    }
   },
   "content_scripts": [
     {
@@ -22,7 +33,14 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["tailwind.css", "inpage.js", "firebase-config.js", "firebaseAI.js", "firebase-injector.js"],
+      "resources": [
+        "tailwind.css",
+        "inpage.js",
+        "firebase-config.js",
+        "firebaseAI.js",
+        "firebase-injector.js",
+        "logo.PNG"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
