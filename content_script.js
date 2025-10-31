@@ -141,7 +141,7 @@ function attachMicsToForms() {
         el.style.color = 'black';
         el.style.border = '1px solid #696FC7';
         el.style.borderRadius = '8px';
-        el.style.padding = '2px 6px';
+        el.style.padding = '8px 16px';
         el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
         el.style.display = 'flex';
         el.style.alignItems = 'center';
@@ -164,7 +164,7 @@ function attachMicsToForms() {
         el.dataset.survsayContext = isSearchForm ? 'search' : 'form';
         el.title = isSearchForm ? 'Search with Survsay' : 'Fill this form with Survsay';
 
-        const logoImg = `<img src="${chrome.runtime.getURL('logo.PNG')}" alt="Survsay" style="width:14px;height:14px;object-fit:contain;border-radius:3px;" />`;
+        const logoImg = `<img src="${chrome.runtime.getURL('logo.PNG')}" alt="Survsay" style="width:30px;height:30px;object-fit:contain;border-radius:3px;" />`;
         el.innerHTML = `${logoImg}`;
 
         document.body.appendChild(el); // Append to body to avoid form layout issues
@@ -371,6 +371,17 @@ function findDivForms() {
 async function processRecording(blob, fallbackTranscript) {
     showBusy();
 
+    // Add processing glow to all form fields immediately
+    if (recordingState.activeForm) {
+        const fields = recordingState.activeForm.querySelectorAll('input, textarea, select');
+        fields.forEach(field => {
+            // Only add glow to visible, editable fields
+            if (field.type !== 'hidden' && field.type !== 'submit' && field.type !== 'button') {
+                addFieldGlow(field, true);
+            }
+        });
+    }
+
     // Perform a single, definitive eligibility check.
     const isNanoEligible = await new Promise((resolve) => {
         const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
@@ -539,6 +550,58 @@ function analyzeForm(form) {
     return { fields };
 }
 
+function addFieldGlow(element, isProcessing = true) {
+    if (!element) return;
+
+    // Inject glow styles if not already present
+    if (!document.getElementById('survsay-glow-styles')) {
+        const style = document.createElement('style');
+        style.id = 'survsay-glow-styles';
+        style.textContent = `
+            @keyframes survsay-glow-pulse {
+                0%, 100% { box-shadow: 0 0 5px rgba(242, 174, 187, 0.5), 0 0 10px rgba(242, 174, 187, 0.3); }
+                50% { box-shadow: 0 0 15px rgba(242, 174, 187, 0.8), 0 0 25px rgba(242, 174, 187, 0.5); }
+            }
+            @keyframes survsay-glow-climax {
+                0% { box-shadow: 0 0 15px rgba(242, 174, 187, 0.8), 0 0 25px rgba(242, 174, 187, 0.5); }
+                50% { box-shadow: 0 0 30px rgba(242, 174, 187, 1), 0 0 50px rgba(242, 174, 187, 0.8), 0 0 70px rgba(242, 174, 187, 0.6); }
+                100% { box-shadow: none; }
+            }
+            .survsay-field-processing {
+                animation: survsay-glow-pulse 1.5s ease-in-out infinite !important;
+                transition: box-shadow 0.3s ease-in-out !important;
+            }
+            .survsay-field-filled {
+                animation: survsay-glow-climax 1s ease-out forwards !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Store original box-shadow
+    if (!element.dataset.survsayOriginalShadow) {
+        element.dataset.survsayOriginalShadow = element.style.boxShadow || 'none';
+    }
+
+    if (isProcessing) {
+        element.classList.add('survsay-field-processing');
+        element.classList.remove('survsay-field-filled');
+    } else {
+        element.classList.remove('survsay-field-processing');
+        element.classList.add('survsay-field-filled');
+
+        // Remove the filled class after animation completes
+        setTimeout(() => {
+            element.classList.remove('survsay-field-filled');
+            // Restore original shadow
+            if (element.dataset.survsayOriginalShadow) {
+                element.style.boxShadow = element.dataset.survsayOriginalShadow;
+                delete element.dataset.survsayOriginalShadow;
+            }
+        }, 1000);
+    }
+}
+
 function fillForm(data, form) {
     if (!data || !data.structured || !form) return;
 
@@ -548,23 +611,45 @@ function fillForm(data, form) {
 
         const el = elements[0];
 
+        // Field is already glowing from processRecording, just fill and climax
         if (el.tagName === 'SELECT') {
             const option = Array.from(el.options).find(o => o.text.toLowerCase() === String(value).toLowerCase());
             if (option) {
                 el.value = option.value;
+                // Climax glow after filling
+                addFieldGlow(el, false);
             }
         } else if (el.type === 'radio') {
             const radioToSelect = Array.from(elements).find(r => r.value.toLowerCase() === String(value).toLowerCase());
             if (radioToSelect) {
                 radioToSelect.checked = true;
+                // Climax glow after filling
+                addFieldGlow(radioToSelect, false);
             }
         } else if (el.type === 'checkbox') {
             // This assumes the value is a boolean or can be interpreted as one.
             el.checked = Boolean(value);
+            // Climax glow after filling
+            addFieldGlow(el, false);
         } else {
             el.value = value;
+            // Climax glow after filling
+            addFieldGlow(el, false);
         }
     }
+
+    // Remove processing glow from any fields that weren't filled
+    const allFields = form.querySelectorAll('input, textarea, select');
+    allFields.forEach(field => {
+        if (field.classList.contains('survsay-field-processing')) {
+            // This field wasn't filled, remove the glow
+            field.classList.remove('survsay-field-processing');
+            if (field.dataset.survsayOriginalShadow) {
+                field.style.boxShadow = field.dataset.survsayOriginalShadow;
+                delete field.dataset.survsayOriginalShadow;
+            }
+        }
+    });
 }
 
 function getSurroundingText(form) {
@@ -605,7 +690,7 @@ function attachRewriterButtons() {
         button.style.lineHeight = '0';
         button.title = 'Rewrite this text with Survsay';
 
-        const rewriterIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#696FC7"><path d="M9.5,3A1.5,1.5 0 0,0 8,4.5A1.5,1.5 0 0,0 9.5,6A1.5,1.5 0 0,0 11,4.5A1.5,1.5 0 0,0 9.5,3M19,13.5A1.5,1.5 0 0,0 17.5,12A1.5,1.5 0 0,0 16,13.5A1.5,1.5 0 0,0 17.5,15A1.5,1.5 0 0,0 19,13.5M19,3.5A1.5,1.5 0 0,0 17.5,2A1.5,1.5 0 0,0 16,3.5A1.5,1.5 0 0,0 17.5,5A1.5,1.5 0 0,0 19,3.5M14.5,21A1.5,1.5 0 0,0 16,19.5A1.5,1.5 0 0,0 14.5,18A1.5,1.5 0 0,0 13,19.5A1.5,1.5 0 0,0 14.5,21M4.14,11.5L2,9.36L5.03,6.34L7.17,8.47L4.14,11.5M19.86,11.5L16.83,8.47L18.97,6.34L22,9.36L19.86,11.5M4.14,14.22L2,16.36L5.03,19.39L7.17,17.25L4.14,14.22M19.86,14.22L16.83,17.25L18.97,19.39L22,16.36L19.86,14.22Z" /></svg>`;
+        const rewriterIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#696FC7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>`;
         button.innerHTML = rewriterIconSvg;
 
         document.body.appendChild(button);
@@ -931,6 +1016,8 @@ async function handleRewrite(field, button) {
 
     // Show global busy overlay
     showBusy();
+    // Add processing glow to field
+    addFieldGlow(field, true);
     // Subtle local affordance
     button.style.transform = 'rotate(360deg)';
     button.style.transition = 'transform 0.5s';
@@ -1017,6 +1104,8 @@ async function handleRewrite(field, button) {
         // Restore sensitive substrings
         const restored = unmaskSensitiveSubstrings(rewrittenText, tokens);
         field.value = restored;
+        // Add climax glow after rewriting
+        addFieldGlow(field, false);
     } else {
         // No output; remain silent
     }
@@ -1104,6 +1193,251 @@ if (typeof process === 'undefined' || process.env.NODE_ENV !== 'test') {
         main();
     }, 100); // Small delay to ensure firebase-injector starts loading first
 }
+
+// --- Simplify Mode for Accessibility ---
+
+let simplifyModeActive = false;
+const simplifiedElements = new Map(); // Store original content
+
+async function simplifyFormLabel(labelElement) {
+    const originalText = labelElement.textContent.trim();
+    if (!originalText || originalText.length < 5) return; // Skip very short labels
+
+    // Check if already simplified
+    if (simplifiedElements.has(labelElement)) return;
+
+    // Find associated select/dropdown
+    let dropdownOptions = '';
+    const forAttr = labelElement.getAttribute('for');
+    let associatedSelect = null;
+
+    if (forAttr) {
+        associatedSelect = document.getElementById(forAttr);
+    } else {
+        // Check if select is inside the label
+        associatedSelect = labelElement.querySelector('select');
+    }
+
+    // If no direct association, look for nearby select
+    if (!associatedSelect) {
+        const nextElement = labelElement.nextElementSibling;
+        if (nextElement && nextElement.tagName === 'SELECT') {
+            associatedSelect = nextElement;
+        }
+    }
+
+    // Extract dropdown options
+    if (associatedSelect && associatedSelect.tagName === 'SELECT') {
+        const options = Array.from(associatedSelect.options)
+            .filter((opt) => opt.value && opt.text.trim())
+            .map((opt) => opt.text.trim());
+
+        if (options.length > 0) {
+            if (options.length <= 5) {
+                // Show all options
+                dropdownOptions = ` (Options: ${options.join(', ')})`;
+            } else {
+                // Show first 3 options
+                dropdownOptions = ` (Options include: ${options.slice(0, 3).join(', ')}, and ${options.length - 3} more)`;
+            }
+        }
+    }
+
+    // Add processing glow to label
+    addFieldGlow(labelElement, true);
+
+    // Store original
+    simplifiedElements.set(labelElement, {
+        text: originalText,
+        styles: {
+            fontSize: labelElement.style.fontSize,
+            lineHeight: labelElement.style.lineHeight,
+            fontWeight: labelElement.style.fontWeight,
+            color: labelElement.style.color,
+            backgroundColor: labelElement.style.backgroundColor,
+            padding: labelElement.style.padding,
+            letterSpacing: labelElement.style.letterSpacing
+        }
+    });
+
+    // Simplify the text using AI
+    const isNanoEligible = await new Promise((resolve) => {
+        const channel = `survsay_nano_eligibility_${Math.random().toString(36).slice(2)}`;
+        const onEligibilityResponse = (e) => {
+            if (e.data.channel === channel) {
+                window.removeEventListener('message', onEligibilityResponse);
+                resolve(e.data.payload && e.data.payload.success && e.data.payload.isEligible);
+            }
+        };
+        setTimeout(() => {
+            window.removeEventListener('message', onEligibilityResponse);
+            resolve(false);
+        }, 1000);
+        window.addEventListener('message', onEligibilityResponse);
+        window.postMessage({ survsay: 'CHECK_NANO_ELIGIBILITY', channel }, '*');
+    });
+
+    let simplifiedText = null;
+
+    if (isNanoEligible) {
+        try {
+            simplifiedText = await new Promise((resolve, reject) => {
+                const channel = `survsay_simplify_${Math.random().toString(36).slice(2)}`;
+                const onResponse = (e) => {
+                    if (e.data.channel === channel) {
+                        window.removeEventListener('message', onResponse);
+                        if (e.data.payload && e.data.payload.success) {
+                            resolve(e.data.payload.rewrittenText);
+                        } else {
+                            reject(new Error(e.data.payload ? e.data.payload.error : 'Unknown error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onResponse);
+                const prompt = `Rewrite this form label to be simpler, clearer, and more friendly. Use plain language that's easy for everyone to understand, especially people with ADHD or dyslexia. Keep it concise. Return ONLY the simplified text, nothing else.\n\nOriginal: "${originalText}"`;
+                window.postMessage({ survsay: 'REWRITE_TEXT', text: originalText, tone: 'friendly', length: 'shorter', context: { instructions: 'Make this very simple and clear for people with ADHD and dyslexia' }, channel }, '*');
+            });
+        } catch (error) {
+            console.warn('Survsay: Nano simplification failed, trying Firebase');
+        }
+    }
+
+    // Fallback to Firebase
+    if (!simplifiedText) {
+        try {
+            simplifiedText = await new Promise((resolve, reject) => {
+                const channel = `survsay_simplify_fb_${Math.random().toString(36).slice(2)}`;
+                const onResponse = (e) => {
+                    if (e.data.action === 'SURVSAY_FIREBASE_REWRITE_RESULT' && e.data.channel === channel) {
+                        window.removeEventListener('message', onResponse);
+                        if (e.data.result) {
+                            resolve(e.data.result);
+                        } else {
+                            reject(new Error(e.data.error || 'Unknown error'));
+                        }
+                    }
+                };
+                window.addEventListener('message', onResponse);
+                window.postMessage({
+                    action: 'SURVSAY_REWRITE_TEXT_FIREBASE',
+                    text: originalText,
+                    tone: 'friendly',
+                    length: 'shorter',
+                    context: { instructions: 'Make this very simple and clear for people with ADHD and dyslexia' },
+                    channel
+                }, '*');
+            });
+        } catch (error) {
+            console.error('Survsay: Simplification failed completely', error);
+            return;
+        }
+    }
+
+    if (simplifiedText) {
+        // Add dropdown options to the simplified text
+        labelElement.textContent = simplifiedText + dropdownOptions;
+    } else {
+        // If simplification failed, at least add the options to original text
+        labelElement.textContent = originalText + dropdownOptions;
+    }
+
+    // Apply accessible styling
+    labelElement.style.fontSize = '16px';
+    labelElement.style.lineHeight = '1.6';
+    labelElement.style.fontWeight = '600';
+    labelElement.style.color = '#1a1a1a';
+    labelElement.style.backgroundColor = '#f9f9f9';
+    labelElement.style.padding = '8px 12px';
+    labelElement.style.letterSpacing = '0.02em';
+    labelElement.style.borderRadius = '6px';
+    labelElement.style.display = 'block';
+    labelElement.style.marginBottom = '8px';
+
+    // Add climax glow after simplification
+    addFieldGlow(labelElement, false);
+}
+
+async function applySimplifyMode() {
+    if (simplifyModeActive) return;
+    simplifyModeActive = true;
+
+    // Find all form labels
+    const labels = document.querySelectorAll('label, .form-label, [class*="label"]');
+    const legendElements = document.querySelectorAll('legend');
+    const allLabelElements = [...labels, ...legendElements];
+
+    // Simplify each label
+    for (const label of allLabelElements) {
+        await simplifyFormLabel(label);
+    }
+
+    // Apply general form styling for better readability
+    const forms = document.querySelectorAll('form, .survsay-div-form');
+    forms.forEach(form => {
+        form.style.maxWidth = '800px';
+        form.style.margin = '0 auto';
+    });
+
+    // Style input fields for better accessibility
+    const inputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select');
+    inputs.forEach(input => {
+        input.style.fontSize = '16px';
+        input.style.padding = '12px';
+        input.style.border = '2px solid #d1d5db';
+        input.style.borderRadius = '8px';
+        input.style.marginBottom = '16px';
+    });
+}
+
+function removeSimplifyMode() {
+    if (!simplifyModeActive) return;
+    simplifyModeActive = false;
+
+    // Restore original content and styles
+    simplifiedElements.forEach((original, element) => {
+        element.textContent = original.text;
+        Object.assign(element.style, original.styles);
+    });
+    simplifiedElements.clear();
+
+    // Remove form styling
+    const forms = document.querySelectorAll('form, .survsay-div-form');
+    forms.forEach(form => {
+        form.style.maxWidth = '';
+        form.style.margin = '';
+    });
+
+    // Remove input styling
+    const inputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select');
+    inputs.forEach(input => {
+        input.style.fontSize = '';
+        input.style.padding = '';
+        input.style.border = '';
+        input.style.borderRadius = '';
+        input.style.marginBottom = '';
+    });
+}
+
+// Listen for settings updates
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'SETTINGS_UPDATED') {
+        if (msg.settings.simplifyMode && !simplifyModeActive) {
+            applySimplifyMode();
+        } else if (!msg.settings.simplifyMode && simplifyModeActive) {
+            removeSimplifyMode();
+        }
+    }
+    if (msg.type === 'PING') {
+        sendResponse({ ok: true });
+    }
+});
+
+// Check simplify mode on load
+chrome.storage.sync.get({ simplifyMode: false }, (settings) => {
+    if (settings.simplifyMode) {
+        applySimplifyMode();
+    }
+});
 
 // --- Exports for Testing ---
 
