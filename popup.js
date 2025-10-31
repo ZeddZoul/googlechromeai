@@ -1,6 +1,7 @@
 // popup.js - Settings management for Survsay
 document.addEventListener('DOMContentLoaded', () => {
     const micToggle = document.getElementById('floating-mic-toggle');
+    const simplifyToggle = document.getElementById('simplify-mode-toggle');
     const micPositionDD = document.getElementById('mic-position');
     const languageDD = document.getElementById('transcription-language');
     const rewriteToneDD = document.getElementById('rewrite-tone');
@@ -13,7 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
         busyPosition: 'top-right',
         language: 'en-US',
         rewriteTone: 'original',
-        rewriteLength: 'original'
+        rewriteLength: 'original',
+        simplifyMode: false
     };
 
     // --- Dropdown helpers ---
@@ -78,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadSettings() {
         chrome.storage.sync.get(DEFAULTS, (settings) => {
             micToggle.checked = settings.micEnabled;
+            simplifyToggle.checked = settings.simplifyMode;
             setDropdownValue('mic-position', settings.micPosition);
             setDropdownValue('busy-position', settings.busyPosition);
             setDropdownValue('transcription-language', settings.language);
@@ -90,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveSettings() {
         const settings = {
             micEnabled: micToggle.checked,
+            simplifyMode: simplifyToggle.checked,
             micPosition: getDropdownValue('mic-position'),
             busyPosition: getDropdownValue('busy-position'),
             language: getDropdownValue('transcription-language'),
@@ -122,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add event listeners
     micToggle.addEventListener('change', saveSettings);
+    simplifyToggle.addEventListener('change', saveSettings);
     wireDropdown('mic-position');
     wireDropdown('busy-position');
     wireDropdown('transcription-language');

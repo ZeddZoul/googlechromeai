@@ -12,13 +12,13 @@
     import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-ai.js";
     
     const firebaseConfig = {
-      apiKey: "AIzaSyCHB0fH6WmOe94lg2DnyYyVEFY4KFcxbiQ",
-      authDomain: "chrome-vox-ai.firebaseapp.com",
-      projectId: "chrome-vox-ai",
-      storageBucket: "chrome-vox-ai.firebasestorage.app",
-      messagingSenderId: "718814904599",
-      appId: "1:718814904599:web:215317fe55368780347752",
-      measurementId: "G-570TLMN8H7"
+      apiKey: "AIzaSyCVLllZy_gnW44L5wkL9lXCeYqE2la6xRs",
+      authDomain: "realtimedb-94d99.firebaseapp.com",
+      databaseURL: "https://realtimedb-94d99-default-rtdb.firebaseio.com",
+      projectId: "realtimedb-94d99",
+      storageBucket: "realtimedb-94d99.firebasestorage.app",
+      messagingSenderId: "367899135796",
+      appId: "1:367899135796:web:d20432ccc0bfa4136b9f61"
     };
     
     try {
