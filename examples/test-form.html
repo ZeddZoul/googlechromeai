@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Survsay — Test Form</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial;
+        padding: 24px;
+        background: #f7f7fb;
+      }
+      .card {
+        background: white;
+        border-radius: 10px;
+        padding: 18px;
+        max-width: 800px;
+        margin: 18px auto;
+        box-shadow: 0 6px 20px rgba(20, 20, 40, 0.06);
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 16px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+      }
+      .row > div {
+        flex: 1;
+      }
+      .hint {
+        color: #6b7280;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>Survsay Test Form</h2>
+      <p class="hint">
+        Use this page to test voice form filling, rewriting, and Simplify Mode.
+        Load the extension (Load unpacked), then open this page and hover over
+        the form to reveal the floating mic button.
+      </p>
+
+      <form id="test-form">
+        <div class="row">
+          <div>
+            <label for="firstName">First name</label>
+            <input id="firstName" name="firstName" placeholder="e.g. Jane" />
+          </div>
+          <div>
+            <label for="lastName">Last name</label>
+            <input id="lastName" name="lastName" placeholder="e.g. Doe" />
+          </div>
+        </div>
+
+        <label for="email">Email address</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          placeholder="you@example.com"
+        />
+
+        <label for="phone">Phone</label>
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          placeholder="+1 555 555 1212"
+        />
+
+        <label for="address">Street address</label>
+        <input id="address" name="address" placeholder="123 Maple St" />
+
+        <div class="row">
+          <div>
+            <label for="city">City</label>
+            <input id="city" name="city" />
+          </div>
+          <div>
+            <label for="state">State</label>
+            <select id="state" name="state">
+              <option value="">Select</option>
+              <option>California</option>
+              <option>New York</option>
+              <option>Texas</option>
+              <option>Florida</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="bio">Short bio</label>
+        <textarea
+          id="bio"
+          name="bio"
+          rows="4"
+          placeholder="Tell us a little about yourself"
+        ></textarea>
+
+        <label>Gender</label>
+        <div>
+          <label
+            ><input type="radio" name="gender" value="female" /> Female</label
+          >
+          <label><input type="radio" name="gender" value="male" /> Male</label>
+          <label
+            ><input type="radio" name="gender" value="other" /> Other</label
+          >
+        </div>
+
+        <label for="newsletter">Subscribe</label>
+        <input id="newsletter" name="newsletter" type="checkbox" /> Yes,
+        subscribe me
+
+        <div style="margin-top: 18px">
+          <button type="submit">Submit</button>
+        </div>
+      </form>
+    </div>
+  </body>
+</html>
